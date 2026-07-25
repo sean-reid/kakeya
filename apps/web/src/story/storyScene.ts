@@ -118,18 +118,28 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
   const coreBox = boundingBox([...sweepSetPolys, ...sweepPaths.map(([a, b]) => [a, b] as const)])
   const sweepRow = AREA_TABLE[STORY_DEPTH - 1]!
 
-  // The join beat plays one specific excursion: a mid-figure join, well away
-  // from the fan boundaries so the tilt is small and typical.
-  const joinSegments = sweep.segments.filter(
+  // The join beat demonstrates ONE excursion at full length: a second sweep
+  // built with a far excursion (the slices are identical - length only
+  // changes the detours), from which we play a single mid-fan join while the
+  // camera rides along. The beats after it show the compact short-join set.
+  const DEMO_EXCURSION = 50
+  const demoSweep = kakeyaSweep({
+    depth: STORY_DEPTH,
+    alpha: alphaFor(STORY_DEPTH),
+    joinExcursion: DEMO_EXCURSION,
+  })
+  const demoCompiled = compile({ start: demoSweep.start, moves: [...demoSweep.moves] })
+  const demoSegments = demoSweep.segments.filter(
     (s): s is Extract<SweepSegment, { kind: 'join' }> => s.kind === 'join',
   )
   // The middle join of the second fan: typical tilt, far from fan boundaries.
   const SLICES_PER_FAN = 2 ** STORY_DEPTH
-  const joinSegment = joinSegments[SLICES_PER_FAN + SLICES_PER_FAN / 2]!
+  const joinSegment = demoSegments[SLICES_PER_FAN + SLICES_PER_FAN / 2]!
   const joinRange = {
-    from: sweepCompiled.offsets[joinSegment.moveStart]!,
-    to: sweepCompiled.offsets[joinSegment.moveEnd]!,
+    from: demoCompiled.offsets[joinSegment.moveStart]!,
+    to: demoCompiled.offsets[joinSegment.moveEnd]!,
   }
+  const demoJoin = demoSweep.joins[joinSegment.join]!
 
   // Deltoid beat.
   const deltoid = deltoidPolygon(UNIT_NEEDLE_R, 1024)
@@ -181,19 +191,20 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
       let counter = plan.counter
       let paint: (p: Painter) => void = plan.draw
       if (index > 0 && local < FADE && !reduced) {
-        const k = ease(local / FADE)
-        const prev = planBeat(index - 1, 1, vp)
-        target = {
-          x: prev.target.x + (target.x - prev.target.x) * k,
-          y: prev.target.y + (target.y - prev.target.y) * k,
-          zoom: Math.exp(
-            Math.log(prev.target.zoom) + (Math.log(target.zoom) - Math.log(prev.target.zoom)) * k,
-          ),
-        }
-        counter = k < 0.5 ? prev.counter : counter
-        paint = (p) => {
-          withAlpha(p, 1 - k, prev.draw)
-          withAlpha(p, k, plan.draw)
+        // Sequential, never simultaneous: the old scene fades fully to paper
+        // in the first half of the window, the new one rises from paper in
+        // the second. No double exposure.
+        const k = local / FADE
+        if (k < 0.5) {
+          const prev = planBeat(index - 1, 1, vp)
+          target = prev.target
+          counter = prev.counter
+          const a = 1 - ease(k * 2)
+          paint = (p) => withAlpha(p, a, prev.draw)
+        } else {
+          const a = ease((k - 0.5) * 2)
+          const current = plan.draw
+          paint = (p) => withAlpha(p, a, current)
         }
       }
 
@@ -315,10 +326,10 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
       }
       case 'join': {
         const s = joinRange.from + (joinRange.to - joinRange.from) * t
-        const n = evaluate(sweepCompiled, s)
+        const n = evaluate(demoCompiled, s)
         target = needleBoxTarget(n, vp)
         draw = (p) => {
-          for (const [a, b] of sweepPaths) drawPencilSegment(p, a, b)
+          for (const [a, b] of demoJoin.paths) drawPencilSegment(p, a, b)
           drawEdges(p, sweepSetPolys, WASH_EDGE)
           drawFlatUnion(p, sweepSetPolys, WASH_FLAT)
           drawNeedle(p, n)
