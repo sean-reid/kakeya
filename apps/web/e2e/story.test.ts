@@ -29,10 +29,15 @@ test('scrolling the story surfaces every beat in order', async ({ page }) => {
 
   for (const id of BEAT_IDS) {
     const u = beatCenter(id)
+    const beat = BEATS.find((b) => b.id === id)!
     await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), storyHeight * u)
-    await expect(page.locator(`.beat[data-beat="${id}"] .card`)).toBeVisible()
     await expect(page.locator(`.beat[data-beat="${id}"]`)).toHaveClass(/active/)
+    await expect(page.locator('#label')).toContainText(beat.copy.slice(0, 24))
+    await expect(page.locator('#label')).toHaveClass(/shown/)
   }
+
+  // One label element, ever - two boxes can never share the screen.
+  await expect(page.locator('#label')).toHaveCount(1)
 
   expect(errors).toEqual([])
 })

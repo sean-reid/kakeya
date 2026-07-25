@@ -60,33 +60,35 @@ body {
   position: relative;
 }
 
-.beat .card {
-  position: sticky;
-  top: 62svh;
-  margin: 0 auto;
-  max-width: 24rem;
+#label {
+  position: fixed;
+  left: 50%;
+  bottom: 12svh;
+  transform: translate(-50%, 0.5rem);
+  z-index: 3;
+  width: min(24rem, calc(100vw - 2.5rem));
   padding: 1rem 1.25rem;
   background: rgba(245, 239, 227, 0.92);
   border: 1px solid rgba(63, 56, 44, 0.25);
   opacity: 0;
-  transform: translateY(0.5rem);
   transition:
-    opacity 0.5s ease,
-    transform 0.5s ease;
+    opacity 0.4s ease,
+    transform 0.4s ease;
+  pointer-events: none;
 }
 
-.beat.active .card {
+#label.shown {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
-.beat .card p {
+#label p {
   margin: 0;
   font-size: 1rem;
   line-height: 1.55;
 }
 
-.beat .card .note {
+#label .note {
   margin-top: 0.5rem;
   font-size: 0.8rem;
   letter-spacing: 0.12em;
@@ -115,10 +117,9 @@ body {
   color: rgba(33, 29, 23, 0.6);
 }
 
-.reduced .beat .card {
-  opacity: 1;
-  transform: none;
-  transition: none;
+.reduced #label {
+  transition: opacity 0.4s ease;
+  transform: translate(-50%, 0);
 }
 
 @media (max-width: 640px) {
@@ -133,13 +134,12 @@ body {
     font-size: 0.85rem;
   }
 
-  .beat .card {
-    top: 66svh;
-    max-width: calc(100vw - 2.5rem);
+  #label {
+    bottom: 9svh;
     padding: 0.85rem 1rem;
   }
 
-  .beat .card p {
+  #label p {
     font-size: 0.92rem;
   }
 }
