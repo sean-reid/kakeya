@@ -30,10 +30,13 @@ export const camera = (t: CameraTarget): Camera => ({
   logZoom: spring(Math.log(t.zoom)),
 })
 
-const OMEGA_PAN = 6
-const OMEGA_ZOOM = 5
+// Touch scrolling tracks the finger; springs tuned for wheel input read as
+// lag under direct manipulation, so coarse pointers get stiffer ones.
+const COARSE = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+const OMEGA_PAN = COARSE ? 11 : 6
+const OMEGA_ZOOM = COARSE ? 9 : 5
 /** Cap on log-zoom velocity: at most ~e^3 change per second. */
-const MAX_ZOOM_RATE = 3
+const MAX_ZOOM_RATE = COARSE ? 5 : 3
 
 export const stepCamera = (cam: Camera, target: CameraTarget, dt: number): Camera => ({
   x: stepSpring(cam.x, target.x, dt, OMEGA_PAN),
