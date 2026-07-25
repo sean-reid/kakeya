@@ -49,6 +49,8 @@ interface State {
   speed: number
   /** Seek destination for the direction dial, or null. */
   seekTo: number | null
+  /** Playback direction: the needle retraces at the ends, never teleports. */
+  forward: boolean
 }
 
 interface Built {
@@ -134,6 +136,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     playing: false,
     speed: 1,
     seekTo: null,
+    forward: true,
   }
   let built = build(state.depth, state.excursion)
   let dirty = true
@@ -143,6 +146,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   playBtn.type = 'button'
   playBtn.dataset.testid = 'play'
   playBtn.textContent = 'Turn the needle'
+  playBtn.setAttribute('aria-pressed', 'false')
 
   const dial = el('input') as HTMLInputElement
   dial.type = 'range'
@@ -192,7 +196,9 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   note.textContent =
     'The needle only ever moves inside what is drawn. Stretch the detours and watch their cost fall; cut deeper and watch the tree shrink.'
 
-  host.append(heading, canvas, areaLine, strip, note)
+  const inner = el('div', 'playground-inner')
+  inner.append(heading, canvas, areaLine, strip, note)
+  host.append(inner)
 
   // Wiring ---------------------------------------------------------------
   const sliderExcursion = (): number =>
@@ -201,10 +207,10 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   const updateAreaLine = (): void => {
     const row = AREA_TABLE[state.depth - 1]!
     areaLine.textContent =
-      `tree ${row.sweepArea.toFixed(4)} + detours ${built.sweep.joinArea.toFixed(4)}` +
-      ` of the half disc's 1.5708`
-    excursionValue.textContent = state.excursion.toFixed(1)
-    depthValue.textContent = `${2 ** state.depth} slivers per corner`
+      `tree ${row.sweepArea.toFixed(4)} + detours ${built.sweep.joinArea.toFixed(4)}. ` +
+      `The plain half disc needs 1.5708.`
+    excursionValue.textContent = `${state.excursion.toFixed(1)} needle lengths`
+    depthValue.textContent = `${2 ** state.depth} slivers per fan`
   }
 
   const rebuild = (): void => {
@@ -217,9 +223,21 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     state.playing = !state.playing
     state.seekTo = null
     playBtn.textContent = state.playing ? 'Hold still' : 'Turn the needle'
+    playBtn.setAttribute('aria-pressed', String(state.playing))
     dirty = true
   })
+  let dialHeld = false
+  dial.addEventListener('pointerdown', () => {
+    dialHeld = true
+  })
+  window.addEventListener('pointerup', () => {
+    dialHeld = false
+  })
   dial.addEventListener('input', () => {
+    dialHeld = true
+    window.setTimeout(() => {
+      dialHeld = false
+    }, 400)
     const tau = (Number(dial.value) * Math.PI) / 180
     state.seekTo = distanceToProgress(built.timeline, distanceForDirection(built, tau))
     state.playing = false
@@ -270,7 +288,15 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     if (!visible) return
 
     if (state.playing) {
-      state.u = (state.u + (dt * state.speed) / 30) % 1
+      const step = (dt * state.speed) / 30
+      state.u += state.forward ? step : -step
+      if (state.u >= 1) {
+        state.u = 1
+        state.forward = false
+      } else if (state.u <= 0) {
+        state.u = 0
+        state.forward = true
+      }
       dirty = true
     } else if (state.seekTo !== null) {
       const step = (dt * state.speed) / 10
@@ -288,12 +314,9 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     const s = progressToDistance(built.timeline, state.u)
     const n = evaluate(built.compiled, s)
 
-    if (!state.playing) {
-      const degrees = Math.round(((((n.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI)
-      dialValue.textContent = `${degrees} degrees`
-    } else {
-      dialValue.textContent = ''
-    }
+    const degrees = Math.round(((((n.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI)
+    dialValue.textContent = `${degrees} degrees`
+    if (!dialHeld) dial.value = String(degrees)
 
     const target = frameBox(
       built.box.minX,

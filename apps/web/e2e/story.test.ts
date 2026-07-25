@@ -115,9 +115,12 @@ test('the whole story keeps the needle at unit length', async ({ page }) => {
   for (const u of ['needle', 'halfdisc', 'deltoid', 'join'].map(beatCenter)) {
     await page.evaluate((v) => window.__kakeya.setProgress(v), u)
     await page.evaluate(() => window.__kakeya.settle())
-    // Poll: slower projects may not have painted the settled frame yet.
+    // Wait for two real painted frames - parallel projects can starve rAF.
+    await page.evaluate(
+      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    )
     await expect
-      .poll(async () => measureNeedle(page), { timeout: 10_000 })
+      .poll(async () => measureNeedle(page), { timeout: 15_000 })
       .toEqual(expect.objectContaining({ ok: true }))
   }
 })
@@ -135,8 +138,10 @@ const measureNeedle = async (page: import('@playwright/test').Page) => {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4
-        // Matches RED #c73a26 (199, 58, 38) from styles.ts with headroom.
-        if (data[i]! > 150 && data[i + 1]! < 90 && data[i + 2]! < 80) {
+        // RED #c73a26 dominance test: survives antialiasing at tiny scales,
+        // rejects paper, wash, and ink, which are all near-neutral.
+        const r = data[i]!
+        if (r > 160 && data[i + 1]! < r - 55 && data[i + 2]! < r - 55) {
           if (x < minX) minX = x
           if (y < minY) minY = y
           if (x > maxX) maxX = x
@@ -146,8 +151,10 @@ const measureNeedle = async (page: import('@playwright/test').Page) => {
     }
     return { span: Math.hypot(maxX - minX, maxY - minY), scale: window.__kakeya.scale() }
   })
+  // The 4px allowance covers stroke caps and antialiasing, which read as
+  // extra length when the camera is far out and the needle is a few px long.
   return {
-    ok: needle.span > needle.scale * 0.9 && needle.span < needle.scale * 1.15,
+    ok: needle.span > needle.scale * 0.9 && needle.span < needle.scale * 1.1 + 4,
     span: needle.span,
     scale: needle.scale,
   }

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const detoursOf = (text: string): number => {
-  const m = text.match(/detours ([\d.]+)/)
+  const m = text.match(/detours (\d+\.\d+)/)
   if (!m) throw new Error(`no detours number in: ${text}`)
   return Number(m[1])
 }
@@ -34,7 +34,7 @@ test('cutting deeper shrinks the tree', async ({ page }) => {
   const shallow = (await area.textContent())!
   await page.getByTestId('depth').fill('8')
   const deep = (await area.textContent())!
-  const treeOf = (t: string): number => Number(t.match(/tree ([\d.]+)/)![1])
+  const treeOf = (t: string): number => Number(t.match(/tree (\d+\.\d+)/)![1])
   expect(treeOf(deep)).toBeLessThan(treeOf(shallow))
 })
 

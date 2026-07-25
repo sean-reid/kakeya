@@ -113,11 +113,16 @@ body {
 }
 
 #playground {
+  /* Full-bleed paper: the fixed story canvas must never peek around it,
+     and the fixed masthead and counter scroll away beneath it. */
   position: relative;
-  z-index: 2;
+  z-index: 4;
   background: #f5efe3;
   border-top: 1px solid rgba(63, 56, 44, 0.25);
   padding: 3rem 1.5rem 4rem;
+}
+
+.playground-inner {
   max-width: 64rem;
   margin: 0 auto;
 }
@@ -167,6 +172,11 @@ body {
   background: rgba(63, 56, 44, 0.06);
 }
 
+.controls button[aria-pressed='true'] {
+  background: rgba(63, 56, 44, 0.1);
+  border-color: rgba(63, 56, 44, 0.7);
+}
+
 .control {
   display: inline-flex;
   align-items: center;
@@ -208,7 +218,7 @@ body {
 
 #after {
   position: relative;
-  z-index: 2;
+  z-index: 4;
   background: #f5efe3;
   border-top: 1px solid rgba(63, 56, 44, 0.25);
   min-height: 40vh;
@@ -239,5 +249,37 @@ body {
     top: 66svh;
     max-width: calc(100vw - 2.5rem);
     padding: 0.85rem 1rem;
+  }
+
+  .playground-plate {
+    height: 48vh;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+  }
+
+  .controls button {
+    width: 100%;
+    padding: 0.8rem 1rem;
+  }
+
+  .control {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+  }
+
+  .control input[type='range'] {
+    width: 100%;
+    min-height: 2rem;
+  }
+
+  .control-value {
+    grid-column: 2;
+    text-align: right;
   }
 }
