@@ -29,17 +29,55 @@ test('scrolling the story surfaces every beat in order', async ({ page }) => {
 
   for (const id of BEAT_IDS) {
     const u = beatCenter(id)
-    const beat = BEATS.find((b) => b.id === id)!
     await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), storyHeight * u)
     await expect(page.locator(`.beat[data-beat="${id}"]`)).toHaveClass(/active/)
-    await expect(page.locator('#label')).toContainText(beat.copy.slice(0, 24))
-    await expect(page.locator('#label')).toHaveClass(/shown/)
+    await expect(page.locator(`.beat[data-beat="${id}"] .card`)).toBeVisible()
   }
 
-  // One label element, ever - two boxes can never share the screen.
-  await expect(page.locator('#label')).toHaveCount(1)
-
   expect(errors).toEqual([])
+})
+
+test('the leaving fade always completes before the entering fade starts', async ({ page }) => {
+  await page.goto('./')
+  const timing = await page.evaluate(() => {
+    // The first beat is active on load; probe one that is not.
+    const probe = document.querySelectorAll('.beat')[3]!.querySelector('.card')!
+    const outDuration = parseFloat(getComputedStyle(probe).transitionDuration)
+    probe.closest('.beat')!.classList.add('active')
+    const inDelay = parseFloat(getComputedStyle(probe).transitionDelay)
+    probe.closest('.beat')!.classList.remove('active')
+    return { outDuration, inDelay }
+  })
+  expect(timing.inDelay).toBeGreaterThan(timing.outDuration)
+})
+
+test('two cards never read as visible together', async ({ page }) => {
+  await page.goto('./')
+  await page.waitForFunction(() => typeof window.__kakeya !== 'undefined')
+  const storyHeight = await page.evaluate(() => {
+    const story = document.getElementById('story')!
+    return story.offsetHeight - window.innerHeight
+  })
+
+  // Walk across every beat boundary and watch the fades play out.
+  for (let i = 1; i < BEATS.length; i++) {
+    const total = BEATS.reduce((s, b) => s + b.heights, 0)
+    const boundary = BEATS.slice(0, i).reduce((s, b) => s + b.heights, 0) / total
+    await page.evaluate(
+      (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+      storyHeight * (boundary + 0.005),
+    )
+    for (let probe = 0; probe < 5; probe++) {
+      await page.waitForTimeout(90)
+      const readable = await page.evaluate(
+        () =>
+          [...document.querySelectorAll('.beat .card')].filter(
+            (c) => parseFloat(getComputedStyle(c).opacity) > 0.5,
+          ).length,
+      )
+      expect(readable).toBeLessThanOrEqual(1)
+    }
+  }
 })
 
 test('beat plates render for review', async ({ page }, testInfo) => {

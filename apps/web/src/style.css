@@ -22,8 +22,8 @@ body {
 
 #masthead {
   position: fixed;
-  top: 1.5rem;
-  left: 1.75rem;
+  top: calc(1.5rem + env(safe-area-inset-top, 0px));
+  left: calc(1.75rem + env(safe-area-inset-left, 0px));
   z-index: 3;
 }
 
@@ -37,12 +37,14 @@ body {
 
 #counter {
   position: fixed;
-  top: 1.6rem;
-  right: 1.75rem;
+  top: calc(1.6rem + env(safe-area-inset-top, 0px));
+  right: calc(1.75rem + env(safe-area-inset-right, 0px));
   z-index: 3;
   font-variant-numeric: tabular-nums;
   font-size: 0.95rem;
   color: rgba(33, 29, 23, 0.75);
+  text-align: right;
+  max-width: 60vw;
   opacity: 0;
   transition: opacity 0.4s ease;
 }
@@ -60,35 +62,39 @@ body {
   position: relative;
 }
 
-#label {
-  position: fixed;
-  left: 50%;
-  bottom: 12svh;
-  transform: translate(-50%, 0.5rem);
-  z-index: 3;
-  width: min(24rem, calc(100vw - 2.5rem));
+/*
+ * Cards ride up and away with their sections. The two fade windows are
+ * disjoint by construction: leaving cards fade fast with no delay, entering
+ * cards wait a quarter second first - so two cards never read as visible
+ * at once, on any platform.
+ */
+.beat .card {
+  position: sticky;
+  top: 62svh;
+  margin: 0 auto;
+  max-width: 24rem;
   padding: 1rem 1.25rem;
   background: rgba(245, 239, 227, 0.92);
   border: 1px solid rgba(63, 56, 44, 0.25);
   opacity: 0;
-  transition:
-    opacity 0.4s ease,
-    transform 0.4s ease;
+  transition: opacity 0.2s ease;
   pointer-events: none;
 }
 
-#label.shown {
+.beat.active .card {
   opacity: 1;
-  transform: translate(-50%, 0);
+  /* The 0.35s delay outlasts the 0.2s fade-out above: the leaving card's
+     animation always completes before this one begins. */
+  transition: opacity 0.4s ease 0.35s;
 }
 
-#label p {
+.beat .card p {
   margin: 0;
   font-size: 1rem;
   line-height: 1.55;
 }
 
-#label .note {
+.beat .card .note {
   margin-top: 0.5rem;
   font-size: 0.8rem;
   letter-spacing: 0.12em;
@@ -117,11 +123,6 @@ body {
   color: rgba(33, 29, 23, 0.6);
 }
 
-.reduced #label {
-  transition: opacity 0.4s ease;
-  transform: translate(-50%, 0);
-}
-
 @media (max-width: 640px) {
   #masthead {
     top: 1rem;
@@ -129,17 +130,20 @@ body {
   }
 
   #counter {
-    top: 1.05rem;
+    /* Clear of the strip iOS Safari's collapsed chrome occupies: sit below
+       the masthead line instead of beside it. */
+    top: calc(3.1rem + env(safe-area-inset-top, 0px));
     right: 1rem;
     font-size: 0.85rem;
   }
 
-  #label {
-    bottom: 9svh;
+  .beat .card {
+    top: 66svh;
+    max-width: calc(100vw - 2.5rem);
     padding: 0.85rem 1rem;
   }
 
-  #label p {
+  .beat .card p {
     font-size: 0.92rem;
   }
 }

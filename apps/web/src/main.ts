@@ -5,9 +5,11 @@ import './style.css'
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 document.documentElement.classList.toggle('reduced', reduced)
 
-// Build the story sections from the beat definitions - scroll spacers with a
-// hidden description each. The visible label is a SINGLE fixed card whose
-// text swaps between beats, so two labels can never share the screen.
+// Build the story sections from the beat definitions - one scroll section per
+// beat, each with its sticky label card (which rides up and away with its
+// section) and a hidden description of the picture. Two cards can never read
+// as visible together: fade-out is fast and immediate, fade-in is delayed
+// past it (see the .card transitions).
 const story = document.getElementById('story')!
 for (const beat of BEATS) {
   const section = document.createElement('section')
@@ -15,33 +17,22 @@ for (const beat of BEATS) {
   section.dataset.beat = beat.id
   section.style.height = `${beat.heights * 100}svh`
 
+  const card = document.createElement('div')
+  card.className = 'card'
+  const p = document.createElement('p')
+  p.textContent = beat.copy
+  card.append(p)
+  if (beat.note) {
+    const note = document.createElement('p')
+    note.className = 'note'
+    note.textContent = beat.note
+    card.append(note)
+  }
   const hidden = document.createElement('p')
   hidden.className = 'visually-hidden'
-  hidden.textContent = `${beat.copy} ${beat.describe}`
-  section.append(hidden)
+  hidden.textContent = beat.describe
+  section.append(card, hidden)
   story.append(section)
-}
-
-const label = document.createElement('div')
-label.id = 'label'
-label.setAttribute('aria-hidden', 'true')
-const labelCopy = document.createElement('p')
-const labelNote = document.createElement('p')
-labelNote.className = 'note'
-label.append(labelCopy, labelNote)
-document.body.append(label)
-
-let labelTimer: number | undefined
-const showLabel = (index: number): void => {
-  const beat = BEATS[index]!
-  label.classList.remove('shown')
-  window.clearTimeout(labelTimer)
-  labelTimer = window.setTimeout(() => {
-    labelCopy.textContent = beat.copy
-    labelNote.textContent = beat.note ?? ''
-    labelNote.style.display = beat.note ? '' : 'none'
-    label.classList.add('shown')
-  }, 240)
 }
 
 const canvas = document.getElementById('plate') as HTMLCanvasElement
@@ -95,7 +86,6 @@ const tick = (now: number): void => {
     sections[activeIndex]?.classList.remove('active')
     sections[frame.beatIndex]?.classList.add('active')
     activeIndex = frame.beatIndex
-    showLabel(activeIndex)
   }
 
   requestAnimationFrame(tick)

@@ -121,13 +121,6 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
     to: sweepCompiled.offsets[joinSegment.moveEnd]!,
   }
   const activeJoin = sweep.joins[joinSegment.join]!
-  const joinPathPoints = activeJoin.paths.flat()
-  const joinWideBox = {
-    minX: Math.min(coreBox.minX, ...joinPathPoints.map((p) => p.x)),
-    minY: Math.min(coreBox.minY, ...joinPathPoints.map((p) => p.y)),
-    maxX: Math.max(coreBox.maxX, ...joinPathPoints.map((p) => p.x)),
-    maxY: Math.max(coreBox.maxY, ...joinPathPoints.map((p) => p.y)),
-  }
 
   // Deltoid beat.
   const deltoid = deltoidPolygon(UNIT_NEEDLE_R, 1024)
@@ -247,19 +240,7 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
         case 'join': {
           const s = joinRange.from + (joinRange.to - joinRange.from) * t
           const n = evaluate(sweepCompiled, s)
-          // The zoom ride is the one genuinely vestibular moment: under
-          // reduced motion the camera holds a wide frame and only the
-          // needle moves.
-          target = reduced
-            ? frameBox(
-                joinWideBox.minX,
-                joinWideBox.minY,
-                joinWideBox.maxX,
-                joinWideBox.maxY,
-                vp,
-                0.12,
-              )
-            : needleBoxTarget(n, vp)
+          target = needleBoxTarget(n, vp)
           draw = (p) => {
             for (const [a, b] of activeJoin.paths) drawPencilSegment(p, a, b)
             drawEdges(p, sweepPolys, WASH_EDGE)
