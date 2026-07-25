@@ -14,8 +14,9 @@ export interface SweepOptions extends PerronOptions {
   /**
    * Base magnitude of the slide taken before each join's tilt. Joins whose
    * line gap is too wide for it stretch further automatically (the tilt must
-   * stay well under a quarter turn), and every excursion leaves through its
-   * fan's spike side, so the detours extend the figure symmetrically.
+   * stay well under a quarter turn). Every excursion leaves through its
+   * fan's BASE side, into the empty sectors between the spike bundles, so
+   * the detours fill the figure's gaps instead of enlarging it.
    */
   readonly joinExcursion: number
 }
@@ -128,7 +129,7 @@ export const kakeyaSweep = (opts: SweepOptions): KakeyaSweep => {
       const to = needleAt(i + 1, next.thetaIn)
       const gap = Math.abs(cross(dir(theta), sub(to.a, from.a)))
       const magnitude = Math.max(opts.joinExcursion, 2.5 * gap)
-      const join = palJoin({ a: from.a, theta }, to.a, parity[i] ? magnitude : -magnitude)
+      const join = palJoin({ a: from.a, theta }, to.a, parity[i] ? -magnitude : magnitude)
       joins.push(join)
       moves.push(...join.moves)
       segments.push({
