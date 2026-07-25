@@ -114,13 +114,19 @@ test('the whole story keeps the needle at unit length', async ({ page }) => {
 
   for (const u of ['needle', 'halfdisc', 'deltoid', 'join'].map(beatCenter)) {
     await page.evaluate((v) => window.__kakeya.setProgress(v), u)
-    await page.evaluate(() => window.__kakeya.settle())
-    // Wait for two real painted frames - parallel projects can starve rAF.
-    await page.evaluate(
-      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
-    )
+    // Self-healing probe: re-settle and wait for two painted frames on every
+    // attempt, so one starved frame under parallel load cannot strand it.
     await expect
-      .poll(async () => measureNeedle(page), { timeout: 15_000 })
+      .poll(
+        async () => {
+          await page.evaluate(() => window.__kakeya.settle())
+          await page.evaluate(
+            () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+          )
+          return measureNeedle(page)
+        },
+        { timeout: 15_000 },
+      )
       .toEqual(expect.objectContaining({ ok: true }))
   }
 })

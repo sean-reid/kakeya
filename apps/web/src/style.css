@@ -162,7 +162,7 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: none;
-  border: 1px solid rgba(63, 56, 44, 0.45);
+  border: 1px solid rgba(63, 56, 44, 0.6);
   padding: 0.55rem 1rem;
   color: inherit;
   cursor: pointer;
@@ -172,7 +172,7 @@ body {
   background: rgba(63, 56, 44, 0.06);
 }
 
-.controls button[aria-pressed='true'] {
+.controls button.playing {
   background: rgba(63, 56, 44, 0.1);
   border-color: rgba(63, 56, 44, 0.7);
 }
@@ -187,13 +187,15 @@ body {
   color: rgba(33, 29, 23, 0.72);
 }
 
+.control .control-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .control input[type='range'] {
   accent-color: #c73a26;
   width: 8.5rem;
-}
-
-.control input[type='checkbox'] {
-  accent-color: #c73a26;
 }
 
 .control-value {
@@ -252,7 +254,7 @@ body {
 #reading a {
   color: inherit;
   text-decoration: none;
-  border-bottom: 1px solid rgba(199, 58, 38, 0.5);
+  border-bottom: 1px solid #c73a26;
 }
 
 #reading a:hover {
@@ -293,6 +295,17 @@ body {
   transition: none;
 }
 
+@media (min-width: 900px) {
+  /* Wide screens: the figure owns the center; the card lives in the left
+     margin like a wall label beside the plate. */
+  .beat .card {
+    margin-left: 5vw;
+    margin-right: auto;
+    max-width: 21rem;
+    top: 58svh;
+  }
+}
+
 @media (max-width: 640px) {
   #masthead {
     top: calc(1rem + env(safe-area-inset-top, 0px));
@@ -330,9 +343,15 @@ body {
 
   .control {
     display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .control .control-name {
+    display: grid;
     grid-template-columns: auto 1fr;
-    align-items: center;
     gap: 0.4rem 0.8rem;
+    width: 100%;
   }
 
   .control input[type='range'] {
@@ -341,7 +360,6 @@ body {
   }
 
   .control-value {
-    grid-column: 2;
     text-align: right;
   }
 }

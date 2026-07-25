@@ -153,21 +153,29 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
 
   // The label card occupies the bottom band of the screen; lift the figure
   // above it and back the zoom off slightly so art and text never fight.
-  const biasForCard = (target: CameraTarget, vp: Viewport): CameraTarget => ({
-    x: target.x,
-    y: target.y - (0.07 * vp.height) / target.zoom,
-    zoom: target.zoom * 0.94,
-  })
+  // On narrow screens the card sits in the bottom band, so the figure lifts
+  // above it; on wide screens the card docks into the left margin instead
+  // and the figure needs only a gentle nudge.
+  const biasForCard = (target: CameraTarget, vp: Viewport): CameraTarget => {
+    const narrow = vp.width < 900
+    return {
+      x: target.x,
+      y: target.y - ((narrow ? 0.13 : 0.05) * vp.height) / target.zoom,
+      zoom: target.zoom * (narrow ? 0.82 : 0.92),
+    }
+  }
 
   const needleBoxTarget = (n: Needle, vp: Viewport): CameraTarget => {
+    // A unit of padding past the needle keeps it clear of the masthead
+    // corner at the excursion's far end.
     const b = needleB(n)
     return frameBox(
-      Math.min(coreBox.minX, n.a.x, b.x),
-      Math.min(coreBox.minY, n.a.y, b.y),
-      Math.max(coreBox.maxX, n.a.x, b.x),
-      Math.max(coreBox.maxY, n.a.y, b.y),
+      Math.min(coreBox.minX, n.a.x - 1, b.x - 1),
+      Math.min(coreBox.minY, n.a.y - 1, b.y - 1),
+      Math.max(coreBox.maxX, n.a.x + 1, b.x + 1),
+      Math.max(coreBox.maxY, n.a.y + 1, b.y + 1),
       vp,
-      0.18,
+      0.16,
     )
   }
 

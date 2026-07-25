@@ -112,22 +112,30 @@ const el = <K extends keyof HTMLElementTagNameMap>(
 }
 
 const control = (label: string, input: HTMLElement, value?: HTMLElement): HTMLElement => {
-  const wrap = el('label', 'control')
-  const name = el('span', 'control-name')
+  const wrap = el('div', 'control')
+  const name = el('label', 'control-name')
   name.textContent = label
-  wrap.append(name, input)
-  if (value) wrap.append(value)
+  name.append(input)
+  wrap.append(name)
+  if (value) {
+    value.setAttribute('aria-hidden', 'true')
+    wrap.append(value)
+  }
   return wrap
 }
 
 export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   host.innerHTML = ''
   const heading = el('h2')
+  heading.id = 'playground-title'
   heading.textContent = 'Hold the needle yourself'
+  host.setAttribute('aria-labelledby', 'playground-title')
+  host.removeAttribute('aria-label')
   const canvas = el('canvas', 'playground-plate')
   canvas.setAttribute('aria-hidden', 'true')
   const areaLine = el('p', 'area-line')
   areaLine.setAttribute('data-testid', 'playground-area')
+  areaLine.setAttribute('role', 'status')
 
   const state: State = {
     depth: 5,
@@ -146,7 +154,6 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   playBtn.type = 'button'
   playBtn.dataset.testid = 'play'
   playBtn.textContent = 'Turn the needle'
-  playBtn.setAttribute('aria-pressed', 'false')
 
   const dial = el('input') as HTMLInputElement
   dial.type = 'range'
@@ -182,6 +189,8 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   speedInput.step = '0.5'
   speedInput.value = '1'
   speedInput.dataset.testid = 'speed'
+  const speedValue = el('span', 'control-value')
+  speedValue.textContent = '1 times around in half a minute'
 
   const strip = el('div', 'controls')
   strip.append(
@@ -189,7 +198,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     control('direction', dial, dialValue),
     control('cuts', depthInput, depthValue),
     control('detour length', excursionInput, excursionValue),
-    control('pace', speedInput),
+    control('pace', speedInput, speedValue),
   )
 
   const note = el('p', 'playground-note')
@@ -204,6 +213,12 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   const sliderExcursion = (): number =>
     2 * Math.exp((Number(excursionInput.value) / 100) * Math.log(50))
 
+  const speakValues = (): void => {
+    depthInput.setAttribute('aria-valuetext', `${2 ** state.depth} slivers per fan`)
+    excursionInput.setAttribute('aria-valuetext', `${state.excursion.toFixed(1)} needle lengths`)
+    speedInput.setAttribute('aria-valuetext', `${speedInput.value} times`)
+  }
+
   const updateAreaLine = (): void => {
     const row = AREA_TABLE[state.depth - 1]!
     areaLine.textContent =
@@ -211,6 +226,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
       `The plain half disc needs 1.5708.`
     excursionValue.textContent = `${state.excursion.toFixed(1)} needle lengths`
     depthValue.textContent = `${2 ** state.depth} slivers per fan`
+    speakValues()
   }
 
   const rebuild = (): void => {
@@ -223,7 +239,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     state.playing = !state.playing
     state.seekTo = null
     playBtn.textContent = state.playing ? 'Hold still' : 'Turn the needle'
-    playBtn.setAttribute('aria-pressed', String(state.playing))
+    playBtn.classList.toggle('playing', state.playing)
     dirty = true
   })
   let dialHeld = false
@@ -254,10 +270,14 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   })
   speedInput.addEventListener('input', () => {
     state.speed = Number(speedInput.value)
+    speedValue.textContent = `${speedInput.value} times around in half a minute`
+    speakValues()
   })
 
   state.excursion = sliderExcursion()
   rebuild()
+  const start = evaluate(built.compiled, 0)
+  dial.value = String(Math.round(((((start.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI))
 
   // Render loop ----------------------------------------------------------
   const ctx = canvas.getContext('2d')!
@@ -334,6 +354,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     const n = evaluate(built.compiled, s)
     const degrees = Math.round(((((n.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI)
     dialValue.textContent = `${degrees} degrees`
+    dial.setAttribute('aria-valuetext', `${degrees} degrees`)
     if (!dialHeld) dial.value = String(degrees)
 
     ctx.fillStyle = PAPER
