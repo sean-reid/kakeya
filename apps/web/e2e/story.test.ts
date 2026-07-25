@@ -115,31 +115,40 @@ test('the whole story keeps the needle at unit length', async ({ page }) => {
   for (const u of ['needle', 'halfdisc', 'deltoid', 'join'].map(beatCenter)) {
     await page.evaluate((v) => window.__kakeya.setProgress(v), u)
     await page.evaluate(() => window.__kakeya.settle())
-    await page.waitForTimeout(150)
-    const needle = await page.evaluate(() => {
-      const canvas = document.getElementById('plate') as HTMLCanvasElement
-      const c = canvas.getContext('2d')!
-      const { width, height } = canvas
-      const data = c.getImageData(0, 0, width, height).data
-      let minX = Infinity
-      let minY = Infinity
-      let maxX = -Infinity
-      let maxY = -Infinity
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const i = (y * width + x) * 4
-          // Matches RED #c73a26 (199, 58, 38) from styles.ts with headroom.
-          if (data[i]! > 150 && data[i + 1]! < 90 && data[i + 2]! < 80) {
-            if (x < minX) minX = x
-            if (y < minY) minY = y
-            if (x > maxX) maxX = x
-            if (y > maxY) maxY = y
-          }
-        }
-      }
-      return { span: Math.hypot(maxX - minX, maxY - minY), scale: window.__kakeya.scale() }
-    })
-    expect(needle.span).toBeGreaterThan(needle.scale * 0.9)
-    expect(needle.span).toBeLessThan(needle.scale * 1.15)
+    // Poll: slower projects may not have painted the settled frame yet.
+    await expect
+      .poll(async () => measureNeedle(page), { timeout: 10_000 })
+      .toEqual(expect.objectContaining({ ok: true }))
   }
 })
+
+const measureNeedle = async (page: import('@playwright/test').Page) => {
+  const needle = await page.evaluate(() => {
+    const canvas = document.getElementById('plate') as HTMLCanvasElement
+    const c = canvas.getContext('2d')!
+    const { width, height } = canvas
+    const data = c.getImageData(0, 0, width, height).data
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        // Matches RED #c73a26 (199, 58, 38) from styles.ts with headroom.
+        if (data[i]! > 150 && data[i + 1]! < 90 && data[i + 2]! < 80) {
+          if (x < minX) minX = x
+          if (y < minY) minY = y
+          if (x > maxX) maxX = x
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    return { span: Math.hypot(maxX - minX, maxY - minY), scale: window.__kakeya.scale() }
+  })
+  return {
+    ok: needle.span > needle.scale * 0.9 && needle.span < needle.scale * 1.15,
+    span: needle.span,
+    scale: needle.scale,
+  }
+}

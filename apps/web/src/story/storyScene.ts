@@ -41,6 +41,7 @@ import {
 } from '../paint/painter'
 import { PAPER, RED_SOFT, WASH_EDGE, WASH_FLAT } from '../paint/styles'
 import { BEATS, beatAt } from './beats'
+import { CODA_BOX, drawCodaPlate } from './codaPlate'
 
 /**
  * One scene renders every beat: the geometry is precomputed once, the camera
@@ -350,14 +351,18 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
         counter = `${sweepRow.sweepArea.toFixed(4)} + ${sweep.joinArea.toFixed(4)} for the detours`
         break
       }
-      case 'solved':
-      case 'coda': {
+      case 'solved': {
         target = frameBox(coreBox.minX, coreBox.minY, coreBox.maxX, coreBox.maxY, vp, 0.16)
         draw = (p) => {
           for (const [a, b] of sweepPaths) drawPencilSegment(p, a, b)
           drawEdges(p, sweepSetPolys, WASH_EDGE)
           drawFlatUnion(p, sweepSetPolys, WASH_FLAT)
         }
+        break
+      }
+      case 'coda': {
+        target = frameBox(CODA_BOX.minX, CODA_BOX.minY, CODA_BOX.maxX, CODA_BOX.maxY, vp, 0.14)
+        draw = (p) => drawCodaPlate(p, t)
         break
       }
     }
