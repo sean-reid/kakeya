@@ -86,6 +86,9 @@ const tick = (now: number): void => {
   if (pinned === null) {
     const scrollable = story.offsetHeight - viewportAtLoad
     u = scrollable > 0 ? -story.getBoundingClientRect().top / scrollable : 0
+    // Clamp BEFORE the idle comparison: past the story's end the raw
+    // fraction keeps growing and would defeat the skip on every frame.
+    u = Math.min(Math.max(u, 0), 1)
   }
 
   // Idle means idle: when nothing moved and the camera has arrived, paint

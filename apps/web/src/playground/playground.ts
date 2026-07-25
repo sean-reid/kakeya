@@ -276,10 +276,13 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   }
   resize()
   window.addEventListener('resize', resize)
-  new IntersectionObserver((entries) => {
-    visible = entries.some((e) => e.isIntersecting)
-    if (visible) dirty = true
-  }).observe(canvas)
+  new IntersectionObserver(
+    (entries) => {
+      visible = entries.some((e) => e.isIntersecting)
+      if (visible) dirty = true
+    },
+    { threshold: 0.05 },
+  ).observe(canvas)
 
   const tick = (now: number): void => {
     const dt = Math.min((now - last) / 1000, 0.1)
@@ -311,13 +314,6 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     }
 
     const vp: Viewport = { width: canvas.clientWidth, height: canvas.clientHeight }
-    const s = progressToDistance(built.timeline, state.u)
-    const n = evaluate(built.compiled, s)
-
-    const degrees = Math.round(((((n.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI)
-    dialValue.textContent = `${degrees} degrees`
-    if (!dialHeld) dial.value = String(degrees)
-
     const target = frameBox(
       built.box.minX,
       built.box.minY,
@@ -329,8 +325,16 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     cam = cam === null ? camera(target) : stepCamera(cam, target, reduced ? 10 : dt)
     const settledNow = lastTarget !== null && cameraSettled(cam, lastTarget)
     lastTarget = target
+    // Everything below here, including the dial readout DOM writes, only
+    // happens on frames that actually change.
     if (!dirty && settledNow) return
     dirty = false
+
+    const s = progressToDistance(built.timeline, state.u)
+    const n = evaluate(built.compiled, s)
+    const degrees = Math.round(((((n.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI)
+    dialValue.textContent = `${degrees} degrees`
+    if (!dialHeld) dial.value = String(degrees)
 
     ctx.fillStyle = PAPER
     ctx.fillRect(0, 0, vp.width, vp.height)
