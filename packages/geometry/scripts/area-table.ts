@@ -6,7 +6,6 @@ import { equilateralFan, perronAreaUpperBound } from '../src/perron'
 import { kakeyaSweep } from '../src/sweep'
 import type { Polygon } from '../src/polygon'
 import { gridUnionArea } from '../src/union'
-import { rotate } from '../src/vec'
 
 /**
  * Measures the union area of the construction at every depth and regenerates
@@ -132,12 +131,9 @@ for (const depth of DEPTHS) {
     throw new Error(`bound violated at depth ${depth}: ${fan.value} > ${bound}`)
   }
 
-  const allSlices: Polygon[] = []
-  for (let f = 0; f < 3; f++) {
-    for (const p of fanPolys) allSlices.push(p.map((v) => rotate(v, (f * Math.PI) / 3)))
-  }
-  const sweep = measure(allSlices, `sweep d${depth}`)
   const joins = kakeyaSweep({ depth, alpha, joinExcursion: 100 })
+  const allSlices: Polygon[] = joins.slices.map((s) => s.polygon)
+  const sweep = measure(allSlices, `sweep d${depth}`)
 
   rows.push({
     depth,

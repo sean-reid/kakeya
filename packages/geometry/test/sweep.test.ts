@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { segmentStrip } from '../src/join'
 import { compile, evaluate, needleB } from '../src/motion'
-import { unionContainsSegment, type Polygon } from '../src/polygon'
+import { unionContains, unionContainsSegment, type Polygon } from '../src/polygon'
 import { kakeyaSweep, sweepEnd, sweepPaths, sweepPolygons } from '../src/sweep'
 import { dist } from '../src/vec'
 
@@ -48,6 +48,60 @@ describe('kakeyaSweep structure', () => {
     }
     expect(cursor).toBe(sweep.moves.length)
   })
+})
+
+describe('kakeyaSweep connectivity - the drawn set is one piece', () => {
+  it('flood fill from any slice reaches every filled cell', () => {
+    const sweep = kakeyaSweep({ depth: 3, alpha: 0.75, joinExcursion: 50 })
+    const polys = sweep.slices.map((s) => s.polygon)
+    const cell = 0.02
+    const box = { minX: -2, minY: -2, maxX: 2, maxY: 2 }
+    const cols = Math.ceil((box.maxX - box.minX) / cell)
+    const rows = Math.ceil((box.maxY - box.minY) / cell)
+    const filled = new Uint8Array(cols * rows)
+    let total = 0
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const p = {
+          x: box.minX + (i + 0.5) * cell,
+          y: box.minY + (j + 0.5) * cell,
+        }
+        if (unionContains(polys, p, cell * 0.75)) {
+          filled[j * cols + i] = 1
+          total++
+        }
+      }
+    }
+    expect(total).toBeGreaterThan(100)
+
+    const start = filled.indexOf(1)
+    const stack = [start]
+    const seen = new Uint8Array(cols * rows)
+    seen[start] = 1
+    let reached = 0
+    while (stack.length > 0) {
+      const idx = stack.pop()!
+      reached++
+      const i = idx % cols
+      const j = (idx - i) / cols
+      for (const [di, dj] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const ni = i + di
+        const nj = j + dj
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue
+        const nidx = nj * cols + ni
+        if (filled[nidx] === 1 && seen[nidx] === 0) {
+          seen[nidx] = 1
+          stack.push(nidx)
+        }
+      }
+    }
+    expect(reached).toBe(total)
+  }, 60_000)
 })
 
 describe('kakeyaSweep containment - the needle never leaves the set', () => {

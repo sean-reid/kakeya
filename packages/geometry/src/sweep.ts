@@ -50,11 +50,39 @@ const rotateSlice = (s: PerronSlice, angle: number): PerronSlice => ({
   offset: s.offset,
 })
 
+const translateSlice = (s: PerronSlice, dx: number, dy: number): PerronSlice => ({
+  polygon: s.polygon.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+  apex: { x: s.apex.x + dx, y: s.apex.y + dy },
+  thetaIn: s.thetaIn,
+  thetaOut: s.thetaOut,
+  offset: s.offset,
+})
+
 export const kakeyaSweep = (opts: SweepOptions): KakeyaSweep => {
   const fan = equilateralFan(opts)
   const slices: PerronSlice[] = []
   for (let f = 0; f < FAN_COUNT; f++) {
-    for (const s of fan) slices.push(rotateSlice(s, f * FAN_ANGLE))
+    // Translating a fan is free - directions are translation-invariant and
+    // the joins carry the needle between any parallel positions - so the
+    // three fans are centered on one point. Each fan's union is connected
+    // (every pairing step overlaps through its heart), so the drawn set
+    // becomes a single connected figure instead of three islands.
+    const rotated = fan.map((s) => rotateSlice(s, f * FAN_ANGLE))
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const s of rotated) {
+      for (const p of s.polygon) {
+        if (p.x < minX) minX = p.x
+        if (p.y < minY) minY = p.y
+        if (p.x > maxX) maxX = p.x
+        if (p.y > maxY) maxY = p.y
+      }
+    }
+    const dx = -(minX + maxX) / 2
+    const dy = -(minY + maxY) / 2
+    for (const s of rotated) slices.push(translateSlice(s, dx, dy))
   }
 
   const start: Needle = { a: slices[0]!.apex, theta: slices[0]!.thetaIn }
