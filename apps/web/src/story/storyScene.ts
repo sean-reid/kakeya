@@ -328,10 +328,12 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
         const s = joinRange.from + (joinRange.to - joinRange.from) * t
         const n = evaluate(demoCompiled, s)
         target = needleBoxTarget(n, vp)
+        // Bare trees and ONE long demonstration detour; the short joins make
+        // their first appearance in the next beat.
         draw = (p) => {
           for (const [a, b] of demoJoin.paths) drawPencilSegment(p, a, b)
-          drawEdges(p, sweepSetPolys, WASH_EDGE)
-          drawFlatUnion(p, sweepSetPolys, WASH_FLAT)
+          drawEdges(p, sweepPolys, WASH_EDGE)
+          drawFlatUnion(p, sweepPolys, WASH_FLAT)
           drawNeedle(p, n)
         }
         break
