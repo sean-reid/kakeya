@@ -45,12 +45,12 @@ export interface SweepSceneOptions {
   readonly depth?: number
   readonly alpha?: number
   readonly joinExcursion?: number
-  /** The needle's travel lines, drawn whisper-faint like the classical plates. */
+  /** The needle's travel lines; hidden unless a beat needs one. */
   readonly showPaths?: boolean
 }
 
 export const createSweepScene = (options: SweepSceneOptions = {}): SweepScene => {
-  const { depth = 5, alpha = 0.8, joinExcursion = 50, showPaths = true } = options
+  const { depth = 5, alpha = 0.8, joinExcursion = 50, showPaths = false } = options
   const sweep = kakeyaSweep({ depth, alpha, joinExcursion })
   const compiled: CompiledProgram = compile({ start: sweep.start, moves: [...sweep.moves] })
   const timeline: Timeline = buildTimeline(compiled)

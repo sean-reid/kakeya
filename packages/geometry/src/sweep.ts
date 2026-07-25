@@ -2,7 +2,7 @@ import { palJoin, type PalJoin } from './join'
 import type { Move, Needle } from './motion'
 import { equilateralFan, perronHeart, type PerronOptions, type PerronSlice } from './perron'
 import type { Polygon } from './polygon'
-import { rotate, type Vec } from './vec'
+import { dir, rotate, type Vec } from './vec'
 
 /**
  * The full Kakeya sweep: three Perron fans of sixty degrees each, rotated
@@ -39,9 +39,6 @@ export interface KakeyaSweep {
   readonly joinArea: number
 }
 
-const FAN_COUNT = 3
-const FAN_ANGLE = Math.PI / 3
-
 const rotateSlice = (s: PerronSlice, angle: number): PerronSlice => ({
   polygon: s.polygon.map((p) => rotate(p, angle)),
   apex: rotate(s.apex, angle),
@@ -62,45 +59,69 @@ export const kakeyaSweep = (opts: SweepOptions): KakeyaSweep => {
   const fan = equilateralFan(opts)
   // Translating a fan is free - directions are translation-invariant and the
   // joins carry the needle between any parallel positions. Following the
-  // classical assembled pictures, the three fans overlap through their
-  // HEARTS: each fan is anchored by the centroid of its heart triangle (the
-  // dense trunk just above the base), so the solid parts coincide at the
-  // center and the figure is one connected mass with spikes radiating out.
+  // classical assembled pictures, the fans are rotated by 0, 120, and 240
+  // degrees and anchored by the centroid of the heart triangle: an
+  // equilateral heart is invariant under 120-degree turns about its
+  // centroid, so the three hearts COINCIDE into one central triangle with
+  // the spike bundles pointing symmetrically outward. Needle directions are
+  // mod 180, so this tiles all of them - the middle stretch is traversed
+  // with the needle reversed (parity below), which changes nothing about
+  // which points it covers.
   const half = 1 / Math.sqrt(3)
   const heart = perronHeart(-half, half, opts)
   const heartHeight = heart.w / (2 * half)
   const anchor = { x: heart.x + heart.w / 2, y: heartHeight / 3 }
 
+  // In needle-theta order: [-120,-60] normal, [-60,0] reversed (the 240-degree
+  // fan read backwards through the mod-pi mirror), [0,60] normal.
+  const FAN_LAYOUT: readonly { rotation: number; reversed: boolean }[] = [
+    { rotation: 0, reversed: false },
+    { rotation: (4 * Math.PI) / 3, reversed: true },
+    { rotation: (2 * Math.PI) / 3, reversed: false },
+  ]
+
   const slices: PerronSlice[] = []
-  for (let f = 0; f < FAN_COUNT; f++) {
-    const turned = rotate(anchor, f * FAN_ANGLE)
+  const parity: boolean[] = []
+  for (const { rotation, reversed } of FAN_LAYOUT) {
+    const turned = rotate(anchor, rotation)
     for (const s of fan) {
-      slices.push(translateSlice(rotateSlice(s, f * FAN_ANGLE), -turned.x, -turned.y))
+      slices.push(translateSlice(rotateSlice(s, rotation), -turned.x, -turned.y))
+      parity.push(reversed)
     }
   }
 
-  const start: Needle = { a: slices[0]!.apex, theta: slices[0]!.thetaIn }
+  // The needle's anchor for a slice: at the apex pointing down the edge when
+  // normal, at the edge's far end pointing back at the apex when reversed.
+  const needleAt = (i: number, edgeTheta: number): Needle => {
+    const s = slices[i]!
+    if (!parity[i]) return { a: s.apex, theta: edgeTheta }
+    const tip = dir(edgeTheta)
+    return { a: { x: s.apex.x + tip.x, y: s.apex.y + tip.y }, theta: edgeTheta - Math.PI }
+  }
+
+  const start: Needle = needleAt(0, slices[0]!.thetaIn)
   const moves: Move[] = []
   const joins: PalJoin[] = []
   const segments: SweepSegment[] = []
 
   let theta = start.theta
-  let apex: Vec = start.a
 
   slices.forEach((s, i) => {
     // Absorb float drift by turning to the slice's exit angle from wherever
     // the running direction actually is; the drift is at machine precision.
-    const turn = s.thetaOut - theta
+    const exitTheta = parity[i] ? s.thetaOut - Math.PI : s.thetaOut
+    const turn = exitTheta - theta
     const moveStart = moves.length
     moves.push({ kind: 'turn', pivot: s.apex, angle: turn })
     segments.push({ kind: 'rotate', slice: i, moveStart, moveEnd: moves.length })
-    theta = s.thetaOut
-    apex = s.apex
+    theta = exitTheta
 
     const next = slices[i + 1]
     if (next) {
       const joinStart = moves.length
-      const join = palJoin({ a: apex, theta }, next.apex, -opts.joinExcursion)
+      const from = needleAt(i, s.thetaOut)
+      const to = needleAt(i + 1, next.thetaIn)
+      const join = palJoin({ a: from.a, theta }, to.a, -opts.joinExcursion)
       joins.push(join)
       moves.push(...join.moves)
       segments.push({

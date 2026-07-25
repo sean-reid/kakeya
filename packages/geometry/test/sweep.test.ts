@@ -20,9 +20,11 @@ describe('kakeyaSweep structure', () => {
     expect(end.theta - sweep.start.theta).toBeCloseTo(Math.PI, 12)
   })
 
-  it('tiles the direction range with no gap at fan boundaries', () => {
+  it('tiles the direction range with no gap at fan boundaries, mod pi', () => {
+    const modPi = (t: number): number => ((t % Math.PI) + Math.PI) % Math.PI
     for (let i = 1; i < sweep.slices.length; i++) {
-      expect(sweep.slices[i]!.thetaIn).toBeCloseTo(sweep.slices[i - 1]!.thetaOut, 12)
+      const gap = Math.abs(modPi(sweep.slices[i]!.thetaIn) - modPi(sweep.slices[i - 1]!.thetaOut))
+      expect(Math.min(gap, Math.PI - gap)).toBeLessThan(1e-12)
     }
   })
 

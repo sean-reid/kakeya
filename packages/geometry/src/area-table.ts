@@ -16,13 +16,13 @@ export interface AreaRow {
 }
 
 export const AREA_TABLE: readonly AreaRow[] = [
-  { depth: 1, alpha: 0.65, fanArea: 0.385381, sweepArea: 0.698273, joinArea: 0.020791 },
-  { depth: 2, alpha: 0.7, fanArea: 0.288791, sweepArea: 0.629049, joinArea: 0.023793 },
-  { depth: 3, alpha: 0.75, fanArea: 0.23483, sweepArea: 0.533231, joinArea: 0.024996 },
-  { depth: 4, alpha: 0.8, fanArea: 0.201745, sweepArea: 0.443796, joinArea: 0.02515 },
-  { depth: 5, alpha: 0.8, fanArea: 0.174381, sweepArea: 0.419822, joinArea: 0.026713 },
-  { depth: 6, alpha: 0.8, fanArea: 0.156868, sweepArea: 0.404479, joinArea: 0.027962 },
-  { depth: 7, alpha: 0.85, fanArea: 0.142433, sweepArea: 0.32841, joinArea: 0.026792 },
-  { depth: 8, alpha: 0.85, fanArea: 0.128597, sweepArea: 0.314341, joinArea: 0.027717 },
-  { depth: 9, alpha: 0.85, fanArea: 0.118599, sweepArea: 0.304177, joinArea: 0.028504 },
+  { depth: 1, alpha: 0.65, fanArea: 0.385381, sweepArea: 0.66684, joinArea: 0.012124 },
+  { depth: 2, alpha: 0.7, fanArea: 0.288791, sweepArea: 0.589128, joinArea: 0.017259 },
+  { depth: 3, alpha: 0.75, fanArea: 0.23483, sweepArea: 0.498979, joinArea: 0.019371 },
+  { depth: 4, alpha: 0.8, fanArea: 0.201745, sweepArea: 0.411508, joinArea: 0.019689 },
+  { depth: 5, alpha: 0.8, fanArea: 0.174381, sweepArea: 0.399158, joinArea: 0.022344 },
+  { depth: 6, alpha: 0.8, fanArea: 0.156868, sweepArea: 0.391254, joinArea: 0.024467 },
+  { depth: 7, alpha: 0.85, fanArea: 0.142433, sweepArea: 0.308632, joinArea: 0.022518 },
+  { depth: 8, alpha: 0.85, fanArea: 0.128597, sweepArea: 0.300052, joinArea: 0.024084 },
+  { depth: 9, alpha: 0.85, fanArea: 0.118599, sweepArea: 0.293853, joinArea: 0.025415 },
 ]
