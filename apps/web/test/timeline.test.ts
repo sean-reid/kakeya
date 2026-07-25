@@ -1,6 +1,6 @@
 import { compile, kakeyaSweep, type Program } from '@kakeya/geometry'
 import { describe, expect, it } from 'vitest'
-import { buildTimeline, progressToDistance } from '../src/engine/timeline'
+import { buildTimeline, distanceToProgress, progressToDistance } from '../src/engine/timeline'
 
 const sweepTimeline = () => {
   const sweep = kakeyaSweep({ depth: 2, alpha: 0.75, joinExcursion: 50 })
@@ -49,5 +49,22 @@ describe('buildTimeline', () => {
         0,
       ) / tl.totalDuration
     expect(turnShare).toBeGreaterThan(0.5)
+  })
+})
+
+describe('distanceToProgress', () => {
+  it('inverts progressToDistance across the whole program', () => {
+    const { tl } = sweepTimeline()
+    for (let i = 0; i <= 200; i++) {
+      const u = i / 200
+      const s = progressToDistance(tl, u)
+      expect(distanceToProgress(tl, s)).toBeCloseTo(u, 9)
+    }
+  })
+
+  it('clamps out-of-range distances', () => {
+    const { compiled, tl } = sweepTimeline()
+    expect(distanceToProgress(tl, -5)).toBe(0)
+    expect(distanceToProgress(tl, compiled.totalLength + 5)).toBeCloseTo(1, 12)
   })
 })

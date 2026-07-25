@@ -1,0 +1,371 @@
+import {
+  AREA_TABLE,
+  boundingBox,
+  compile,
+  evaluate,
+  kakeyaSweep,
+  type CompiledProgram,
+  type KakeyaSweep,
+  type Polygon,
+} from '@kakeya/geometry'
+import {
+  camera,
+  cameraSettled,
+  cameraTransform,
+  frameBox,
+  stepCamera,
+  worldToScreen,
+  type Camera,
+  type CameraTarget,
+  type Viewport,
+} from '../engine/camera'
+import {
+  buildTimeline,
+  distanceToProgress,
+  progressToDistance,
+  type Timeline,
+} from '../engine/timeline'
+import {
+  drawEdges,
+  drawFlatUnion,
+  drawNeedle,
+  drawPencilSegment,
+  type Painter,
+} from '../paint/painter'
+import { PAPER, RED_SOFT, WASH_EDGE, WASH_FLAT } from '../paint/styles'
+
+/**
+ * The instrument. Every control drives the same verified machinery the story
+ * uses: depth and detour length rebuild the construction (a couple of
+ * milliseconds), the dial and playhead move the needle along the exact
+ * motion program, and the area line always shows the measured tree area
+ * plus the exact detour cost of what is currently drawn.
+ */
+interface State {
+  depth: number
+  excursion: number
+  /** Timeline progress in [0, 1]. */
+  u: number
+  playing: boolean
+  speed: number
+  follow: boolean
+  trail: boolean
+  /** Seek destination for the direction dial, or null. */
+  seekTo: number | null
+}
+
+interface Built {
+  sweep: KakeyaSweep
+  compiled: CompiledProgram
+  timeline: Timeline
+  setPolys: Polygon[]
+  paths: (readonly [{ x: number; y: number }, { x: number; y: number }])[]
+  box: { minX: number; minY: number; maxX: number; maxY: number }
+  /** Rotation segments: needle theta span per program span, for the dial. */
+  turns: { thetaFrom: number; thetaTo: number; sFrom: number; sTo: number }[]
+}
+
+const build = (depth: number, excursion: number): Built => {
+  const sweep = kakeyaSweep({
+    depth,
+    alpha: AREA_TABLE[depth - 1]!.alpha,
+    joinExcursion: excursion,
+  })
+  const compiled = compile({ start: sweep.start, moves: [...sweep.moves] })
+  const timeline = buildTimeline(compiled)
+  const setPolys = [
+    ...sweep.slices.map((s) => s.polygon),
+    ...sweep.joins.flatMap((j) => [...j.sectors]),
+  ]
+  const paths = sweep.joins.flatMap((j) => [...j.paths])
+  const box = boundingBox([...setPolys, ...paths.map(([a, b]) => [a, b] as const)])
+  const turns = sweep.segments
+    .filter((seg) => seg.kind === 'rotate')
+    .map((seg) => ({
+      thetaFrom: compiled.states[seg.moveStart]!.theta,
+      thetaTo: compiled.states[seg.moveEnd]!.theta,
+      sFrom: compiled.offsets[seg.moveStart]!,
+      sTo: compiled.offsets[seg.moveEnd]!,
+    }))
+  return { sweep, compiled, timeline, setPolys, paths, box, turns }
+}
+
+/** Program distance where the needle points in direction tau (mod pi). */
+const distanceForDirection = (built: Built, tau: number): number => {
+  const theta0 = built.turns[0]!.thetaFrom
+  const absolute = theta0 + ((((tau - theta0) % Math.PI) + Math.PI) % Math.PI)
+  for (const turn of built.turns) {
+    if (absolute >= turn.thetaFrom - 1e-9 && absolute <= turn.thetaTo + 1e-9) {
+      const f = (absolute - turn.thetaFrom) / (turn.thetaTo - turn.thetaFrom || 1)
+      return turn.sFrom + (turn.sTo - turn.sFrom) * f
+    }
+  }
+  return 0
+}
+
+const el = <K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+): HTMLElementTagNameMap[K] => {
+  const node = document.createElement(tag)
+  if (className) node.className = className
+  return node
+}
+
+const control = (label: string, input: HTMLElement, value?: HTMLElement): HTMLElement => {
+  const wrap = el('label', 'control')
+  const name = el('span', 'control-name')
+  name.textContent = label
+  wrap.append(name, input)
+  if (value) wrap.append(value)
+  return wrap
+}
+
+export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
+  host.innerHTML = ''
+  const heading = el('h2')
+  heading.textContent = 'Hold the needle yourself'
+  const canvas = el('canvas', 'playground-plate')
+  canvas.setAttribute('aria-hidden', 'true')
+  const areaLine = el('p', 'area-line')
+  areaLine.setAttribute('data-testid', 'playground-area')
+
+  const state: State = {
+    depth: 5,
+    excursion: 8,
+    u: 0,
+    playing: false,
+    speed: 1,
+    follow: false,
+    trail: true,
+    seekTo: null,
+  }
+  let built = build(state.depth, state.excursion)
+  let dirty = true
+
+  // Controls -----------------------------------------------------------
+  const playBtn = el('button')
+  playBtn.type = 'button'
+  playBtn.dataset.testid = 'play'
+  playBtn.textContent = 'Turn the needle'
+
+  const dial = el('input') as HTMLInputElement
+  dial.type = 'range'
+  dial.min = '0'
+  dial.max = '180'
+  dial.step = '1'
+  dial.value = '0'
+  dial.dataset.testid = 'direction'
+  const dialValue = el('span', 'control-value')
+
+  const depthInput = el('input') as HTMLInputElement
+  depthInput.type = 'range'
+  depthInput.min = '1'
+  depthInput.max = '8'
+  depthInput.step = '1'
+  depthInput.value = String(state.depth)
+  depthInput.dataset.testid = 'depth'
+  const depthValue = el('span', 'control-value')
+
+  const excursionInput = el('input') as HTMLInputElement
+  excursionInput.type = 'range'
+  excursionInput.min = '0'
+  excursionInput.max = '100'
+  excursionInput.step = '1'
+  excursionInput.value = '30'
+  excursionInput.dataset.testid = 'excursion'
+  const excursionValue = el('span', 'control-value')
+
+  const speedInput = el('input') as HTMLInputElement
+  speedInput.type = 'range'
+  speedInput.min = '0.5'
+  speedInput.max = '3'
+  speedInput.step = '0.5'
+  speedInput.value = '1'
+  speedInput.dataset.testid = 'speed'
+
+  const followInput = el('input') as HTMLInputElement
+  followInput.type = 'checkbox'
+  followInput.dataset.testid = 'follow'
+
+  const trailInput = el('input') as HTMLInputElement
+  trailInput.type = 'checkbox'
+  trailInput.checked = true
+  trailInput.dataset.testid = 'trail'
+
+  const strip = el('div', 'controls')
+  strip.append(
+    playBtn,
+    control('direction', dial, dialValue),
+    control('cuts', depthInput, depthValue),
+    control('detour length', excursionInput, excursionValue),
+    control('pace', speedInput),
+    control('ride along', followInput),
+    control('trail', trailInput),
+  )
+
+  const note = el('p', 'playground-note')
+  note.textContent =
+    'The needle only ever moves inside what is drawn. Stretch the detours and watch their cost fall; cut deeper and watch the tree shrink.'
+
+  host.append(heading, canvas, areaLine, strip, note)
+
+  // Wiring ---------------------------------------------------------------
+  const sliderExcursion = (): number =>
+    2 * Math.exp((Number(excursionInput.value) / 100) * Math.log(50))
+
+  const updateAreaLine = (): void => {
+    const row = AREA_TABLE[state.depth - 1]!
+    areaLine.textContent =
+      `tree ${row.sweepArea.toFixed(4)} + detours ${built.sweep.joinArea.toFixed(4)}` +
+      ` of the half disc's 1.5708`
+    excursionValue.textContent = state.excursion.toFixed(1)
+    depthValue.textContent = `${2 ** state.depth} slivers per corner`
+  }
+
+  const rebuild = (): void => {
+    built = build(state.depth, state.excursion)
+    updateAreaLine()
+    dirty = true
+  }
+
+  playBtn.addEventListener('click', () => {
+    state.playing = !state.playing
+    state.seekTo = null
+    playBtn.textContent = state.playing ? 'Hold still' : 'Turn the needle'
+    dirty = true
+  })
+  dial.addEventListener('input', () => {
+    const tau = (Number(dial.value) * Math.PI) / 180
+    state.seekTo = distanceToProgress(built.timeline, distanceForDirection(built, tau))
+    state.playing = false
+    playBtn.textContent = 'Turn the needle'
+    dirty = true
+  })
+  depthInput.addEventListener('input', () => {
+    state.depth = Number(depthInput.value)
+    rebuild()
+  })
+  excursionInput.addEventListener('input', () => {
+    state.excursion = sliderExcursion()
+    rebuild()
+  })
+  speedInput.addEventListener('input', () => {
+    state.speed = Number(speedInput.value)
+  })
+  followInput.addEventListener('change', () => {
+    state.follow = followInput.checked
+    dirty = true
+  })
+  trailInput.addEventListener('change', () => {
+    state.trail = trailInput.checked
+    dirty = true
+  })
+
+  state.excursion = sliderExcursion()
+  rebuild()
+
+  // Render loop ----------------------------------------------------------
+  const ctx = canvas.getContext('2d')!
+  let cam: Camera | null = null
+  let lastTarget: CameraTarget | null = null
+  let dpr = 1
+  let visible = false
+  let last = performance.now()
+
+  const resize = (): void => {
+    dpr = window.devicePixelRatio || 1
+    canvas.width = Math.round(canvas.clientWidth * dpr)
+    canvas.height = Math.round(canvas.clientHeight * dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    dirty = true
+  }
+  resize()
+  window.addEventListener('resize', resize)
+  new IntersectionObserver((entries) => {
+    visible = entries.some((e) => e.isIntersecting)
+    if (visible) dirty = true
+  }).observe(canvas)
+
+  const tick = (now: number): void => {
+    const dt = Math.min((now - last) / 1000, 0.1)
+    last = now
+    requestAnimationFrame(tick)
+    if (!visible) return
+
+    if (state.playing) {
+      state.u = (state.u + (dt * state.speed) / 30) % 1
+      dirty = true
+    } else if (state.seekTo !== null) {
+      const step = (dt * state.speed) / 10
+      const delta = state.seekTo - state.u
+      if (Math.abs(delta) <= step) {
+        state.u = state.seekTo
+        state.seekTo = null
+      } else {
+        state.u += Math.sign(delta) * step
+      }
+      dirty = true
+    }
+
+    const vp: Viewport = { width: canvas.clientWidth, height: canvas.clientHeight }
+    const s = progressToDistance(built.timeline, state.u)
+    const n = evaluate(built.compiled, s)
+
+    if (!state.playing) {
+      const degrees = Math.round(((((n.theta % Math.PI) + Math.PI) % Math.PI) * 180) / Math.PI)
+      dialValue.textContent = `${degrees} degrees`
+    } else {
+      dialValue.textContent = ''
+    }
+
+    let target: CameraTarget
+    if (state.follow) {
+      target = frameBox(n.a.x - 1.6, n.a.y - 1.6, n.a.x + 1.6, n.a.y + 1.6, vp, 0.1)
+    } else {
+      target = frameBox(built.box.minX, built.box.minY, built.box.maxX, built.box.maxY, vp, 0.08)
+    }
+    cam = cam === null ? camera(target) : stepCamera(cam, target, reduced ? 10 : dt)
+    const settledNow = lastTarget !== null && cameraSettled(cam, lastTarget)
+    lastTarget = target
+    if (!dirty && settledNow) return
+    dirty = false
+
+    ctx.fillStyle = PAPER
+    ctx.fillRect(0, 0, vp.width, vp.height)
+    const p: Painter = { ctx, transform: cameraTransform(cam, vp), dpr }
+
+    for (const [a, b] of built.paths) drawPencilSegment(p, a, b)
+    drawEdges(p, built.setPolys, WASH_EDGE)
+    drawFlatUnion(p, built.setPolys, WASH_FLAT)
+
+    if (state.trail && state.u > 0) {
+      const steps = Math.min(160, Math.max(12, Math.floor(state.u * 160)))
+      p.ctx.strokeStyle = RED_SOFT
+      p.ctx.lineWidth = 2 / dpr
+      for (let i = 0; i <= steps; i++) {
+        const past = evaluate(
+          built.compiled,
+          progressToDistance(built.timeline, (state.u * i) / steps),
+        )
+        drawPencilTrailSegment(p, past)
+      }
+    }
+
+    drawNeedle(p, n)
+  }
+  requestAnimationFrame(tick)
+}
+
+const drawPencilTrailSegment = (
+  p: Painter,
+  n: { a: { x: number; y: number }; theta: number },
+): void => {
+  const { ctx, transform } = p
+  const sa = worldToScreen(transform, n.a.x, n.a.y)
+  const sb = worldToScreen(transform, n.a.x + Math.cos(n.theta), n.a.y + Math.sin(n.theta))
+  ctx.beginPath()
+  ctx.moveTo(sa.x, sa.y)
+  ctx.lineTo(sb.x, sb.y)
+  ctx.stroke()
+}

@@ -112,6 +112,100 @@ body {
   white-space: nowrap;
 }
 
+#playground {
+  position: relative;
+  z-index: 2;
+  background: #f5efe3;
+  border-top: 1px solid rgba(63, 56, 44, 0.25);
+  padding: 3rem 1.5rem 4rem;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+#playground h2 {
+  font-size: 1rem;
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin: 0 0 1.5rem;
+}
+
+.playground-plate {
+  display: block;
+  width: 100%;
+  height: min(62vh, 34rem);
+  border: 1px solid rgba(63, 56, 44, 0.25);
+}
+
+.area-line {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  color: rgba(33, 29, 23, 0.75);
+  margin: 0.75rem 0 1.25rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  align-items: center;
+}
+
+.controls button {
+  font: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid rgba(63, 56, 44, 0.45);
+  padding: 0.55rem 1rem;
+  color: inherit;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: rgba(63, 56, 44, 0.06);
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(33, 29, 23, 0.72);
+}
+
+.control input[type='range'] {
+  accent-color: #c73a26;
+  width: 8.5rem;
+}
+
+.control input[type='checkbox'] {
+  accent-color: #c73a26;
+}
+
+.control-value {
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+  min-width: 5.5rem;
+}
+
+.playground-note {
+  margin-top: 1.5rem;
+  max-width: 34rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: rgba(33, 29, 23, 0.8);
+}
+
+:focus-visible {
+  outline: 2px solid #c73a26;
+  outline-offset: 2px;
+}
+
 #after {
   position: relative;
   z-index: 2;

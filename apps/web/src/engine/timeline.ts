@@ -38,6 +38,25 @@ export const buildTimeline = (compiled: CompiledProgram, pacing: PacingOptions =
   return { compiled, durations, totalDuration: total }
 }
 
+/** Progress u in [0,1] for travel distance s - the inverse of progressToDistance. */
+export const distanceToProgress = (tl: Timeline, s: number): number => {
+  const { compiled, durations, totalDuration } = tl
+  if (totalDuration === 0) return 0
+  const target = Math.min(Math.max(s, 0), compiled.totalLength)
+  let lo = 0
+  let hi = compiled.offsets.length - 2
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (compiled.offsets[mid]! <= target) lo = mid
+    else hi = mid - 1
+  }
+  const span = compiled.offsets[lo + 1]! - compiled.offsets[lo]!
+  const fraction = span === 0 ? 1 : (target - compiled.offsets[lo]!) / span
+  const d0 = durations[lo]!
+  const d1 = durations[lo + 1]!
+  return (d0 + (d1 - d0) * fraction) / totalDuration
+}
+
 /** Travel distance s for progress u in [0,1]. */
 export const progressToDistance = (tl: Timeline, u: number): number => {
   const { compiled, durations, totalDuration } = tl

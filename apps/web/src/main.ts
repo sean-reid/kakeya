@@ -1,3 +1,4 @@
+import { mountPlayground } from './playground/playground'
 import { BEATS, totalHeights } from './story/beats'
 import { createStoryScene } from './story/storyScene'
 import './style.css'
@@ -139,6 +140,8 @@ window.__kakeya = {
     return scene.scale() * dpr
   },
 }
+
+mountPlayground(document.getElementById('playground')!, reduced)
 
 // The story container needs its full height even before sections lay out.
 story.style.minHeight = `${totalHeights() * 100}svh`
