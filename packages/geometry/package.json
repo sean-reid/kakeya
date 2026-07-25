@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "fast-check": "^4.9.0",
     "vitest": "^4.1.10"
   }
 }
