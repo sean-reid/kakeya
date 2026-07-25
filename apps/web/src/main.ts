@@ -31,7 +31,7 @@ requestAnimationFrame(tick)
 // Deterministic hooks for the browser tests: freeze the clock, set progress.
 declare global {
   interface Window {
-    __kakeya: { setProgress(u: number): void; freeze(): void }
+    __kakeya: { setProgress(u: number): void; freeze(): void; scale(): number }
   }
 }
 window.__kakeya = {
@@ -41,5 +41,8 @@ window.__kakeya = {
   },
   freeze() {
     frozen = true
+  },
+  scale() {
+    return scene.scale() * dpr
   },
 }

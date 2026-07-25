@@ -47,7 +47,16 @@ export const drawFlatUnion = (p: Painter, polys: readonly Polygon[], fill: strin
   const { ctx, transform } = p
   ctx.beginPath()
   for (const poly of polys) {
-    poly.forEach((v, i) => {
+    // Trace every polygon with one winding: mixed windings cancel under the
+    // nonzero rule and cut holes where shapes overlap.
+    let doubled = 0
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i]!
+      const b = poly[(i + 1) % poly.length]!
+      doubled += a.x * b.y - b.x * a.y
+    }
+    const pts = doubled < 0 ? [...poly].reverse() : poly
+    pts.forEach((v, i) => {
       const s = worldToScreen(transform, v.x, v.y)
       if (i === 0) ctx.moveTo(s.x, s.y)
       else ctx.lineTo(s.x, s.y)

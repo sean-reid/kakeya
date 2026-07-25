@@ -10,6 +10,31 @@ test('the plate renders the sweep at key moments', async ({ page }, testInfo) =>
     await page.screenshot({ path: testInfo.outputPath(`plate-${String(u).replace('.', '_')}.png`) })
   }
 
+  const needle = await page.evaluate(() => {
+    const canvas = document.getElementById('plate') as HTMLCanvasElement
+    const ctx = canvas.getContext('2d')!
+    const { width, height } = canvas
+    const data = ctx.getImageData(0, 0, width, height).data
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        if (data[i]! > 150 && data[i + 1]! < 90 && data[i + 2]! < 80) {
+          if (x < minX) minX = x
+          if (y < minY) minY = y
+          if (x > maxX) maxX = x
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    return { span: Math.hypot(maxX - minX, maxY - minY), scale: window.__kakeya.scale() }
+  })
+  expect(needle.span).toBeGreaterThan(needle.scale * 0.95)
+  expect(needle.span).toBeLessThan(needle.scale * 1.1)
+
   const pixels = await page.evaluate(() => {
     const canvas = document.getElementById('plate') as HTMLCanvasElement
     const ctx = canvas.getContext('2d')!

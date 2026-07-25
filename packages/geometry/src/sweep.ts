@@ -1,6 +1,6 @@
 import { palJoin, type PalJoin } from './join'
 import type { Move, Needle } from './motion'
-import { equilateralFan, type PerronOptions, type PerronSlice } from './perron'
+import { equilateralFan, perronHeart, type PerronOptions, type PerronSlice } from './perron'
 import type { Polygon } from './polygon'
 import { rotate, type Vec } from './vec'
 
@@ -60,29 +60,23 @@ const translateSlice = (s: PerronSlice, dx: number, dy: number): PerronSlice => 
 
 export const kakeyaSweep = (opts: SweepOptions): KakeyaSweep => {
   const fan = equilateralFan(opts)
+  // Translating a fan is free - directions are translation-invariant and the
+  // joins carry the needle between any parallel positions. Following the
+  // classical assembled pictures, the three fans overlap through their
+  // HEARTS: each fan is anchored by the centroid of its heart triangle (the
+  // dense trunk just above the base), so the solid parts coincide at the
+  // center and the figure is one connected mass with spikes radiating out.
+  const half = 1 / Math.sqrt(3)
+  const heart = perronHeart(-half, half, opts)
+  const heartHeight = heart.w / (2 * half)
+  const anchor = { x: heart.x + heart.w / 2, y: heartHeight / 3 }
+
   const slices: PerronSlice[] = []
   for (let f = 0; f < FAN_COUNT; f++) {
-    // Translating a fan is free - directions are translation-invariant and
-    // the joins carry the needle between any parallel positions - so the
-    // three fans are centered on one point. Each fan's union is connected
-    // (every pairing step overlaps through its heart), so the drawn set
-    // becomes a single connected figure instead of three islands.
-    const rotated = fan.map((s) => rotateSlice(s, f * FAN_ANGLE))
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const s of rotated) {
-      for (const p of s.polygon) {
-        if (p.x < minX) minX = p.x
-        if (p.y < minY) minY = p.y
-        if (p.x > maxX) maxX = p.x
-        if (p.y > maxY) maxY = p.y
-      }
+    const turned = rotate(anchor, f * FAN_ANGLE)
+    for (const s of fan) {
+      slices.push(translateSlice(rotateSlice(s, f * FAN_ANGLE), -turned.x, -turned.y))
     }
-    const dx = -(minX + maxX) / 2
-    const dy = -(minY + maxY) / 2
-    for (const s of rotated) slices.push(translateSlice(s, dx, dy))
   }
 
   const start: Needle = { a: slices[0]!.apex, theta: slices[0]!.thetaIn }

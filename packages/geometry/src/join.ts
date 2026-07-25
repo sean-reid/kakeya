@@ -23,11 +23,18 @@ export interface PalJoin {
 
 const SECTOR_ARC_STEPS = 32
 
-/** Fan polygon for the unit-radius sector swept about pivot from angle a0 to a1. */
+/**
+ * Fan polygon for the unit-radius sector swept about pivot from angle a0 to
+ * a1, always wound counterclockwise: a clockwise polygon cancels against
+ * counterclockwise neighbors under nonzero-winding fills and punches paper-
+ * colored holes in the drawn set.
+ */
 export const sectorPolygon = (pivot: Vec, a0: number, a1: number): Polygon => {
+  const lo = Math.min(a0, a1)
+  const hi = Math.max(a0, a1)
   const pts: Vec[] = [pivot]
   for (let i = 0; i <= SECTOR_ARC_STEPS; i++) {
-    const ang = a0 + ((a1 - a0) * i) / SECTOR_ARC_STEPS
+    const ang = lo + ((hi - lo) * i) / SECTOR_ARC_STEPS
     pts.push(add(pivot, dir(ang)))
   }
   return pts

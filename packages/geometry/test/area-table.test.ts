@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { AREA_TABLE } from '../src/area-table'
 import { deltoidArea, UNIT_NEEDLE_R } from '../src/deltoid'
-import { equilateralFan } from '../src/perron'
-import { kakeyaSweep } from '../src/sweep'
+import { equilateralFan, falconerAreaBound } from '../src/perron'
+import { signedArea } from '../src/polygon'
+import { kakeyaSweep, sweepPolygons } from '../src/sweep'
 import { gridUnionArea } from '../src/union'
 
 describe('the generated area table', () => {
@@ -28,6 +29,22 @@ describe('the generated area table', () => {
     for (let i = 1; i < AREA_TABLE.length; i++) {
       expect(AREA_TABLE[i]!.fanArea).toBeLessThan(AREA_TABLE[i - 1]!.fanArea)
       expect(AREA_TABLE[i]!.sweepArea).toBeLessThan(AREA_TABLE[i - 1]!.sweepArea)
+    }
+  })
+
+  it('sits under the Falconer savings bound at every depth - the translations land right', () => {
+    const triangleArea = 1 / Math.sqrt(3)
+    for (const row of AREA_TABLE) {
+      const bound = falconerAreaBound({ depth: row.depth, alpha: row.alpha }) * triangleArea
+      expect(row.fanArea).toBeLessThanOrEqual(bound + 1e-3)
+      expect(row.fanArea).toBeGreaterThan(bound * 0.8)
+    }
+  })
+
+  it('draws every polygon of the set counterclockwise', () => {
+    const sweep = kakeyaSweep({ depth: 4, alpha: 0.8, joinExcursion: 50 })
+    for (const poly of sweepPolygons(sweep)) {
+      expect(signedArea(poly)).toBeGreaterThan(0)
     }
   })
 

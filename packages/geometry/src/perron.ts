@@ -40,7 +40,14 @@ export interface PerronSlice {
  * Pure bookkeeping on base intervals: hearts at each stage all share one
  * width, and only the right member of each pair moves.
  */
-export const perronOffsets = (a: number, c: number, opts: PerronOptions): number[] => {
+interface PerronLayout {
+  readonly offsets: readonly number[]
+  /** Left end and width of the final heart's base interval. */
+  readonly heartX: number
+  readonly heartW: number
+}
+
+const perronLayout = (a: number, c: number, opts: PerronOptions): PerronLayout => {
   const { depth, alpha } = opts
   if (!(alpha > 0.5 && alpha < 1)) throw new Error('perron: alpha must lie in (1/2, 1)')
   if (!Number.isInteger(depth) || depth < 0) throw new Error('perron: depth must be a whole number')
@@ -48,19 +55,13 @@ export const perronOffsets = (a: number, c: number, opts: PerronOptions): number
   const n = 2 ** depth
   const w = (c - a) / n
 
-  interface Monster {
-    readonly offsets: readonly number[]
-    readonly heartX: number
-    readonly heartW: number
-  }
-
-  let monsters: Monster[] = []
+  let monsters: PerronLayout[] = []
   for (let i = 0; i < n; i++) {
     monsters.push({ offsets: [0], heartX: a + i * w, heartW: w })
   }
 
   while (monsters.length > 1) {
-    const next: Monster[] = []
+    const next: PerronLayout[] = []
     for (let i = 0; i < monsters.length; i += 2) {
       const left = monsters[i]!
       const right = monsters[i + 1]!
@@ -75,7 +76,25 @@ export const perronOffsets = (a: number, c: number, opts: PerronOptions): number
     monsters = next
   }
 
-  return [...monsters[0]!.offsets]
+  return monsters[0]!
+}
+
+export const perronOffsets = (a: number, c: number, opts: PerronOptions): number[] => [
+  ...perronLayout(a, c, opts).offsets,
+]
+
+/**
+ * Base interval of the tree's heart - the densest, trunk-like part of the
+ * figure. The assembled set overlaps the three fans here, matching the
+ * classical pictures and buying a little extra area for free.
+ */
+export const perronHeart = (
+  a: number,
+  c: number,
+  opts: PerronOptions,
+): { readonly x: number; readonly w: number } => {
+  const layout = perronLayout(a, c, opts)
+  return { x: layout.heartX, w: layout.heartW }
 }
 
 /**
@@ -109,6 +128,17 @@ export const perronAreaUpperBound = (opts: PerronOptions): number => {
   const { depth, alpha } = opts
   const a2k = alpha ** (2 * depth)
   return a2k + (2 * (1 - alpha) ** 2 * (1 - a2k)) / (1 - alpha * alpha)
+}
+
+/**
+ * Falconer's guaranteed-savings bound: the union area over triangle area is
+ * at most 1 - (3a-1)(1 - a^2k)/(1+a). The guarantee only materializes when
+ * every pairing lands its hearts in exactly the right overlap, so measured
+ * areas sitting under (and near) this line verify the translated positions.
+ */
+export const falconerAreaBound = (opts: PerronOptions): number => {
+  const { depth, alpha } = opts
+  return 1 - ((3 * alpha - 1) * (1 - alpha ** (2 * depth))) / (1 + alpha)
 }
 
 /** The canonical fan: equilateral triangle of height 1, apex up, 60 degrees of directions. */

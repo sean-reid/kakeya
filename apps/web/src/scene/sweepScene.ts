@@ -36,6 +36,8 @@ export interface SweepScene {
   setProgress(u: number): void
   /** Advance springs and repaint. */
   frame(ctx: CanvasRenderingContext2D, vp: Viewport, dpr: number, dt: number): void
+  /** Current pixels per world unit, for tests that measure the canvas. */
+  scale(): number
   readonly sweep: KakeyaSweep
 }
 
@@ -43,12 +45,12 @@ export interface SweepSceneOptions {
   readonly depth?: number
   readonly alpha?: number
   readonly joinExcursion?: number
-  /** Excursion lines stay hidden unless a beat asks for them. */
+  /** The needle's travel lines, drawn whisper-faint like the classical plates. */
   readonly showPaths?: boolean
 }
 
 export const createSweepScene = (options: SweepSceneOptions = {}): SweepScene => {
-  const { depth = 5, alpha = 0.8, joinExcursion = 50, showPaths = false } = options
+  const { depth = 5, alpha = 0.8, joinExcursion = 50, showPaths = true } = options
   const sweep = kakeyaSweep({ depth, alpha, joinExcursion })
   const compiled: CompiledProgram = compile({ start: sweep.start, moves: [...sweep.moves] })
   const timeline: Timeline = buildTimeline(compiled)
@@ -58,11 +60,15 @@ export const createSweepScene = (options: SweepSceneOptions = {}): SweepScene =>
 
   let progress = 0
   let cam: Camera | null = null
+  let lastScale = 0
 
   return {
     sweep,
     setProgress(u: number) {
       progress = Math.min(Math.max(u, 0), 1)
+    },
+    scale() {
+      return lastScale
     },
     frame(ctx, vp, dpr, dt) {
       const target = frameBox(treeBox.minX, treeBox.minY, treeBox.maxX, treeBox.maxY, vp, 0.16)
@@ -71,7 +77,9 @@ export const createSweepScene = (options: SweepSceneOptions = {}): SweepScene =>
       ctx.fillStyle = PAPER
       ctx.fillRect(0, 0, vp.width, vp.height)
 
-      const painter: Painter = { ctx, transform: cameraTransform(cam, vp), dpr }
+      const transform = cameraTransform(cam, vp)
+      lastScale = transform.scale
+      const painter: Painter = { ctx, transform, dpr }
       if (showPaths) {
         for (const [a, b] of paths) drawPencilSegment(painter, a, b)
       }
