@@ -104,13 +104,14 @@ body {
 }
 
 /* Pushed too high by its section's end: gone before it can touch the
-   masthead, active or not. */
-.beat.active .card.cleared {
+   masthead - active, leaving, or otherwise. The id wins every specificity
+   contest above. */
+#story .beat .card.cleared {
   opacity: 0;
   transform: translateY(-1.4rem);
   transition:
-    opacity 0.18s ease,
-    transform 0.25s ease;
+    opacity 0.15s ease,
+    transform 0.2s ease;
 }
 
 .beat .card p {

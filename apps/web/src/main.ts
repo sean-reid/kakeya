@@ -75,6 +75,7 @@ window
   .addEventListener('change', () => window.location.reload())
 
 let lastU = -1
+let lastScrollY = -1
 
 const tick = (now: number): void => {
   const dt = warpNext ? 5 : Math.min((now - last) / 1000, 0.1)
@@ -89,6 +90,19 @@ const tick = (now: number): void => {
     // Clamp BEFORE the idle comparison: past the story's end the raw
     // fraction keeps growing and would defeat the skip on every frame.
     u = Math.min(Math.max(u, 0), 1)
+  }
+
+  // Any card pushed toward the masthead must vanish before it gets there -
+  // whatever its fade state, and even when the story progress is pinned at
+  // its ends. Runs on every scroll movement, ahead of the idle skip below.
+  const scrollNow = window.scrollY
+  if (scrollNow !== lastScrollY) {
+    lastScrollY = scrollNow
+    const limit = window.innerHeight * 0.24
+    for (const section of sections) {
+      const card = section.querySelector('.card')
+      if (card) card.classList.toggle('cleared', card.getBoundingClientRect().top < limit)
+    }
   }
 
   // Idle means idle: when nothing moved and the camera has arrived, paint
@@ -118,16 +132,10 @@ const tick = (now: number): void => {
       window.setTimeout(() => leaving.classList.remove('leaving'), 450)
     }
     sections[activeIndex]?.classList.remove('active')
-    sections[frame.beatIndex]?.classList.add('active')
+    const entering = sections[frame.beatIndex]
+    entering?.classList.add('active')
+    entering?.querySelector('.card')?.classList.remove('leaving')
     activeIndex = frame.beatIndex
-  }
-
-  // A card pushed up by its section's end must be gone before it reaches
-  // the masthead zone, whether or not its beat is still active.
-  const activeCard = sections[activeIndex]?.querySelector('.card')
-  if (activeCard) {
-    const top = activeCard.getBoundingClientRect().top
-    activeCard.classList.toggle('cleared', top < window.innerHeight * 0.24)
   }
 
   requestAnimationFrame(tick)
