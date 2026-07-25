@@ -112,9 +112,22 @@ const tick = (now: number): void => {
   counterEl.classList.toggle('visible', frame.counter !== '')
 
   if (frame.beatIndex !== activeIndex) {
+    const leaving = sections[activeIndex]?.querySelector('.card')
+    if (leaving) {
+      leaving.classList.add('leaving')
+      window.setTimeout(() => leaving.classList.remove('leaving'), 450)
+    }
     sections[activeIndex]?.classList.remove('active')
     sections[frame.beatIndex]?.classList.add('active')
     activeIndex = frame.beatIndex
+  }
+
+  // A card pushed up by its section's end must be gone before it reaches
+  // the masthead zone, whether or not its beat is still active.
+  const activeCard = sections[activeIndex]?.querySelector('.card')
+  if (activeCard) {
+    const top = activeCard.getBoundingClientRect().top
+    activeCard.classList.toggle('cleared', top < window.innerHeight * 0.24)
   }
 
   requestAnimationFrame(tick)

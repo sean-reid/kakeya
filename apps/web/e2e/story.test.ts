@@ -165,3 +165,28 @@ const measureNeedle = async (page: import('@playwright/test').Page) => {
     scale: needle.scale,
   }
 }
+
+test('no readable card ever reaches the masthead zone', async ({ page }) => {
+  await page.goto('./')
+  await page.waitForFunction(() => typeof window.__kakeya !== 'undefined')
+  const storyHeight = await page.evaluate(() => {
+    const story = document.getElementById('story')!
+    return story.offsetHeight - window.innerHeight
+  })
+
+  for (let i = 0; i <= 30; i++) {
+    await page.evaluate(
+      (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+      (storyHeight * i) / 30,
+    )
+    await page.waitForTimeout(300)
+    const intruders = await page.evaluate(() => {
+      const limit = window.innerHeight * 0.14
+      return [...document.querySelectorAll('.beat .card')].filter((c) => {
+        const opacity = parseFloat(getComputedStyle(c).opacity)
+        return opacity > 0.3 && c.getBoundingClientRect().top < limit
+      }).length
+    })
+    expect(intruders).toBe(0)
+  }
+})

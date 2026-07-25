@@ -77,15 +77,40 @@ body {
   background: rgba(245, 239, 227, 0.92);
   border: 1px solid rgba(63, 56, 44, 0.25);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transform: translateY(0.6rem);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   pointer-events: none;
 }
 
 .beat.active .card {
   opacity: 1;
-  /* The 0.35s delay outlasts the 0.2s fade-out above: the leaving card's
+  transform: none;
+  /* The 0.35s delay outlasts every fade-out below: the leaving card's
      animation always completes before this one begins. */
-  transition: opacity 0.4s ease 0.35s;
+  transition:
+    opacity 0.4s ease 0.35s,
+    transform 0.4s ease 0.35s;
+}
+
+/* Every departing card drifts upward as it fades, wherever it stands. */
+.beat .card.leaving {
+  opacity: 0;
+  transform: translateY(-1.4rem);
+  transition:
+    opacity 0.22s ease,
+    transform 0.28s ease;
+}
+
+/* Pushed too high by its section's end: gone before it can touch the
+   masthead, active or not. */
+.beat.active .card.cleared {
+  opacity: 0;
+  transform: translateY(-1.4rem);
+  transition:
+    opacity 0.18s ease,
+    transform 0.25s ease;
 }
 
 .beat .card p {
