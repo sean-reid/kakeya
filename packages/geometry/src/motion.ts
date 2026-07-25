@@ -1,5 +1,5 @@
 import type { Vec } from './vec'
-import { add, dir, dist, rotateAbout, scale, vec } from './vec'
+import { add, dir, dist, rotateAbout, scale } from './vec'
 
 /**
  * A needle is a unit segment from `a` toward angle `theta`.
@@ -80,10 +80,4 @@ export const evaluate = (c: CompiledProgram, s: number): Needle => {
   const span = offsets[lo + 1]! - offsets[lo]!
   const fraction = span === 0 ? 1 : (s - offsets[lo]!) / span
   return applyMove(states[lo]!, program.moves[lo]!, fraction)
-}
-
-/** Needle midpoint, handy for cameras and tests. */
-export const needleMid = (n: Needle): Vec => {
-  const b = needleB(n)
-  return vec((n.a.x + b.x) / 2, (n.a.y + b.y) / 2)
 }

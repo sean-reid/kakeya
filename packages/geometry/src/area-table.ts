@@ -3,6 +3,9 @@
 // sampling. The needle's naive half-disc sweep has area 1.5708;
 // these are what the construction brings that down to.
 
+/** The excursion every joinArea in this table was measured at. */
+export const TABLE_EXCURSION = 100
+
 export interface AreaRow {
   readonly depth: number
   /** Overlap parameter chosen by measurement at this depth. */

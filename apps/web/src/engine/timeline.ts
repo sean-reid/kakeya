@@ -3,7 +3,7 @@ import type { CompiledProgram } from '@kakeya/geometry'
 /**
  * Presentation clock for a motion program. The PATH the needle takes is exact;
  * only the pacing is shaped: rotations play proportional to angle swept, and
- * the joins' long slides are compressed (square root of distance) so a
+ * the joins' long slides are compressed logarithmically so a
  * hundred-unit excursion reads as a moment, not a minute. Mapping progress
  * u in [0,1] to travel distance s is strictly monotone, so scrubbing can
  * never run the needle backwards.
@@ -16,7 +16,7 @@ export interface Timeline {
 }
 
 export interface PacingOptions {
-  /** Presentation time per unit of slide, applied to log(1 + distance). */
+  /** Maps a slide's total distance to its presentation duration. */
   readonly slideCompression?: (distance: number) => number
   /** Presentation time per radian of rotation. */
   readonly turnWeight?: number

@@ -58,10 +58,20 @@ let warpNext = false
 let last = performance.now()
 let activeIndex = -1
 
-// Measured once: on iOS the live innerHeight changes as the toolbar
-// collapses mid-scroll, and dividing by a moving number makes the whole
-// animation lurch. The sections are sized in svh, which is just as fixed.
-const viewportAtLoad = window.innerHeight
+// Measured once per orientation: on iOS the live innerHeight changes as the
+// toolbar collapses mid-scroll, and dividing by a moving number makes the
+// whole animation lurch. The sections are sized in svh, which is just as
+// fixed - but a rotation is a real change and re-measures.
+let viewportAtLoad = window.innerHeight
+window.addEventListener('orientationchange', () => {
+  window.setTimeout(() => {
+    viewportAtLoad = window.innerHeight
+    needsDraw = true
+  }, 300)
+})
+window
+  .matchMedia('(prefers-reduced-motion: reduce)')
+  .addEventListener('change', () => window.location.reload())
 
 let lastU = -1
 
@@ -112,7 +122,6 @@ declare global {
   interface Window {
     __kakeya: {
       setProgress(u: number): void
-      freeze(): void
       settle(): void
       scale(): number
     }
@@ -122,9 +131,6 @@ window.__kakeya = {
   setProgress(u: number) {
     pinned = u
     scene.setProgress(u)
-  },
-  freeze() {
-    pinned = lastU
   },
   settle() {
     warpNext = true

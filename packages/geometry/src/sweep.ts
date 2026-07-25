@@ -2,7 +2,7 @@ import { palJoin, type PalJoin } from './join'
 import type { Move, Needle } from './motion'
 import { equilateralFan, perronHeart, type PerronOptions, type PerronSlice } from './perron'
 import type { Polygon } from './polygon'
-import { dir, rotate, type Vec } from './vec'
+import { cross, dir, rotate, sub, type Vec } from './vec'
 
 /**
  * The full Kakeya sweep: three Perron fans of sixty degrees each, rotated
@@ -11,7 +11,12 @@ import { dir, rotate, type Vec } from './vec'
  * a half turn - every direction - inside the drawn set.
  */
 export interface SweepOptions extends PerronOptions {
-  /** Magnitude of the backward slide taken before each join's tilt. */
+  /**
+   * Base magnitude of the slide taken before each join's tilt. Joins whose
+   * line gap is too wide for it stretch further automatically (the tilt must
+   * stay well under a quarter turn), and every excursion leaves through its
+   * fan's spike side, so the detours extend the figure symmetrically.
+   */
   readonly joinExcursion: number
 }
 
@@ -121,7 +126,9 @@ export const kakeyaSweep = (opts: SweepOptions): KakeyaSweep => {
       const joinStart = moves.length
       const from = needleAt(i, s.thetaOut)
       const to = needleAt(i + 1, next.thetaIn)
-      const join = palJoin({ a: from.a, theta }, to.a, -opts.joinExcursion)
+      const gap = Math.abs(cross(dir(theta), sub(to.a, from.a)))
+      const magnitude = Math.max(opts.joinExcursion, 2.5 * gap)
+      const join = palJoin({ a: from.a, theta }, to.a, parity[i] ? magnitude : -magnitude)
       joins.push(join)
       moves.push(...join.moves)
       segments.push({

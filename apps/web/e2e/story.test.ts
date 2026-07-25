@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { BEATS } from '../src/story/beats'
+import { BEATS, totalHeights } from '../src/story/beats'
 
 const BEAT_IDS = BEATS.map((b) => b.id)
 
 /** Global progress at the middle of a beat, honoring the height weights. */
 const beatCenter = (id: string): number => {
-  const total = BEATS.reduce((s, b) => s + b.heights, 0)
+  const total = totalHeights()
   let acc = 0
   for (const b of BEATS) {
     if (b.id === id) return (acc + b.heights / 2) / total
@@ -17,6 +17,9 @@ const beatCenter = (id: string): number => {
 test('scrolling the story surfaces every beat in order', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (err) => errors.push(err.message))
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
 
   await page.goto('./')
   await page.waitForFunction(() => typeof window.__kakeya !== 'undefined')
@@ -42,13 +45,19 @@ test('the leaving fade always completes before the entering fade starts', async 
   const timing = await page.evaluate(() => {
     // The first beat is active on load; probe one that is not.
     const probe = document.querySelectorAll('.beat')[3]!.querySelector('.card')!
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const outDuration = parseFloat(getComputedStyle(probe).transitionDuration)
     probe.closest('.beat')!.classList.add('active')
     const inDelay = parseFloat(getComputedStyle(probe).transitionDelay)
     probe.closest('.beat')!.classList.remove('active')
-    return { outDuration, inDelay }
+    return { outDuration, inDelay, reduced }
   })
-  expect(timing.inDelay).toBeGreaterThan(timing.outDuration)
+  if (timing.reduced) {
+    // Reduced motion swaps instantly; instant swaps cannot overlap.
+    expect(timing.outDuration).toBe(0)
+  } else {
+    expect(timing.inDelay).toBeGreaterThan(timing.outDuration)
+  }
 })
 
 test('two cards never read as visible together', async ({ page }) => {
@@ -61,8 +70,7 @@ test('two cards never read as visible together', async ({ page }) => {
 
   // Walk across every beat boundary and watch the fades play out.
   for (let i = 1; i < BEATS.length; i++) {
-    const total = BEATS.reduce((s, b) => s + b.heights, 0)
-    const boundary = BEATS.slice(0, i).reduce((s, b) => s + b.heights, 0) / total
+    const boundary = BEATS.slice(0, i).reduce((s, b) => s + b.heights, 0) / totalHeights()
     await page.evaluate(
       (y) => window.scrollTo({ top: y, behavior: 'instant' }),
       storyHeight * (boundary + 0.005),
@@ -83,12 +91,17 @@ test('two cards never read as visible together', async ({ page }) => {
 test('beat plates render for review', async ({ page }, testInfo) => {
   await page.goto('./')
   await page.waitForFunction(() => typeof window.__kakeya !== 'undefined')
+  const storyHeight = await page.evaluate(() => {
+    const story = document.getElementById('story')!
+    return story.offsetHeight - window.innerHeight
+  })
 
   for (let i = 0; i < BEAT_IDS.length; i++) {
     const u = beatCenter(BEAT_IDS[i]!)
-    await page.evaluate((v) => window.__kakeya.setProgress(v), u)
+    // Really scroll, so the sticky cards are part of the picture too.
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), storyHeight * u)
     await page.evaluate(() => window.__kakeya.settle())
-    await page.waitForTimeout(150)
+    await page.waitForTimeout(850)
     await page.screenshot({
       path: testInfo.outputPath(`beat-${String(i).padStart(2, '0')}-${BEAT_IDS[i]}.png`),
     })
@@ -115,6 +128,7 @@ test('the whole story keeps the needle at unit length', async ({ page }) => {
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
           const i = (y * width + x) * 4
+          // Matches RED #c73a26 (199, 58, 38) from styles.ts with headroom.
           if (data[i]! > 150 && data[i + 1]! < 90 && data[i + 2]! < 80) {
             if (x < minX) minX = x
             if (y < minY) minY = y

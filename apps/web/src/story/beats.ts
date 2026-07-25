@@ -47,7 +47,7 @@ export const BEATS: readonly Beat[] = [
     id: 'besicovitch',
     heights: 1.2,
     copy: 'Abram Besicovitch, 1928: there is no least area. Start with a triangle.',
-    describe: 'A single flat triangle appears.',
+    describe: 'A single flat triangle appears, area 0.5774.',
   },
   {
     id: 'construction',
@@ -55,32 +55,32 @@ export const BEATS: readonly Beat[] = [
     copy: 'Cut it into slivers and slide them into each other. Every sliver still points the way it pointed. The room shrinks.',
     note: 'The Perron tree',
     describe:
-      'The triangle splits into thinner and thinner triangles that slide sideways into heavy overlap, forming a spiky tree. A counter shows the area falling.',
+      'The triangle splits into thinner and thinner triangles that slide sideways into heavy overlap, forming a spiky tree. A counter shows the area falling from 0.5774 to 0.1744.',
   },
   {
     id: 'join',
     heights: 2.2,
-    copy: 'To pass between slivers, the needle slides far out along its own line, tilts by a hair, and slides back. The detour is nearly free. Pal, 1920.',
+    copy: 'To pass between slivers, the needle slides out along its own line, tilts, and slides back. The farther the detour, the thinner its cost. Pal, 1920.',
     describe:
       'The camera follows the needle on a long excursion away from the figure and back, along faint travel lines.',
   },
   {
     id: 'sweep',
     heights: 2.6,
-    copy: 'The full turn, in four tenths of a square unit. Deeper cuts go lower. There is no floor.',
+    copy: 'The full turn. The tree costs four tenths; the stubby detours drawn here cost more than they must. Stretch them off the page and their price falls toward nothing.',
     describe:
       'The needle works through the whole spiky figure, turning through every direction while staying inside it.',
   },
   {
     id: 'solved',
     heights: 1.4,
-    copy: 'A question about these sets stayed open for a century. Hong Wang and Joshua Zahl closed it in 2025. The Fields Medal followed.',
+    copy: 'The flat problem was settled by 1928. Its cousin in space held out for a century, until Hong Wang and Joshua Zahl closed it in 2025. The Fields Medal followed.',
     describe: 'The finished figure rests.',
   },
   {
     id: 'coda',
     heights: 1.6,
-    copy: 'A needle can do all of this in space, too. That is where the century went.',
+    copy: 'Picture the same game in space: a needle, every direction, almost no room. That is the world Wang and Zahl mapped.',
     describe: 'The figure holds while the closing line appears.',
   },
 ]

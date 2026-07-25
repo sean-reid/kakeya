@@ -1,5 +1,5 @@
 import type { Needle, Polygon, Vec } from '@kakeya/geometry'
-import { needleB } from '@kakeya/geometry'
+import { needleB, signedArea } from '@kakeya/geometry'
 import { worldToScreen, type Transform } from '../engine/camera'
 import { INK, PENCIL, RED, WASH, WASH_EDGE } from './styles'
 
@@ -27,7 +27,7 @@ const tracePolygon = (p: Painter, poly: Polygon): void => {
   ctx.closePath()
 }
 
-export const hairline = (p: Painter): number => 1 / p.dpr
+const hairline = (p: Painter): number => 1 / p.dpr
 
 export const drawWashPolygon = (p: Painter, poly: Polygon): void => {
   tracePolygon(p, poly)
@@ -49,13 +49,7 @@ export const drawFlatUnion = (p: Painter, polys: readonly Polygon[], fill: strin
   for (const poly of polys) {
     // Trace every polygon with one winding: mixed windings cancel under the
     // nonzero rule and cut holes where shapes overlap.
-    let doubled = 0
-    for (let i = 0; i < poly.length; i++) {
-      const a = poly[i]!
-      const b = poly[(i + 1) % poly.length]!
-      doubled += a.x * b.y - b.x * a.y
-    }
-    const pts = doubled < 0 ? [...poly].reverse() : poly
+    const pts = signedArea(poly) < 0 ? [...poly].reverse() : poly
     pts.forEach((v, i) => {
       const s = worldToScreen(transform, v.x, v.y)
       if (i === 0) ctx.moveTo(s.x, s.y)
@@ -112,7 +106,7 @@ export const drawNeedle = (p: Painter, n: Needle): void => {
   ctx.moveTo(sa.x, sa.y)
   ctx.lineTo(sb.x, sb.y)
   ctx.strokeStyle = RED
-  ctx.lineWidth = Math.max(2 / p.dpr, hairline(p) * 2)
+  ctx.lineWidth = hairline(p) * 2
   ctx.lineCap = 'round'
   ctx.stroke()
 }

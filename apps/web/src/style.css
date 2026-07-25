@@ -99,7 +99,7 @@ body {
   font-size: 0.8rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(33, 29, 23, 0.6);
+  color: rgba(33, 29, 23, 0.72);
 }
 
 .visually-hidden {
@@ -120,13 +120,17 @@ body {
   min-height: 40vh;
   display: grid;
   place-items: center;
-  color: rgba(33, 29, 23, 0.6);
+  color: rgba(33, 29, 23, 0.72);
+}
+
+.reduced .beat .card {
+  transition: none;
 }
 
 @media (max-width: 640px) {
   #masthead {
-    top: 1rem;
-    left: 1rem;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+    left: calc(1rem + env(safe-area-inset-left, 0px));
   }
 
   #counter {
@@ -141,9 +145,5 @@ body {
     top: 66svh;
     max-width: calc(100vw - 2.5rem);
     padding: 0.85rem 1rem;
-  }
-
-  .beat .card p {
-    font-size: 0.92rem;
   }
 }

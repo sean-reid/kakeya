@@ -12,6 +12,6 @@ export const WASH = 'rgba(63, 56, 44, 0.08)'
  */
 export const WASH_FLAT = '#d4cdc0'
 export const WASH_EDGE = 'rgba(63, 56, 44, 0.55)'
-export const PENCIL = 'rgba(63, 56, 44, 0.16)'
+export const PENCIL = 'rgba(63, 56, 44, 0.12)'
 export const RED = '#c73a26'
 export const RED_SOFT = 'rgba(199, 58, 38, 0.12)'

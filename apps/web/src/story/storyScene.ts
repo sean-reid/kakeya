@@ -2,12 +2,15 @@ import {
   AREA_TABLE,
   boundingBox,
   compile,
+  deltoidArea,
   deltoidNeedle,
   deltoidPolygon,
   dir,
+  EQUILATERAL_AREA,
+  equilateralFan,
   evaluate,
   kakeyaSweep,
-  perronTree,
+  needleB,
   UNIT_NEEDLE_R,
   vec,
   type CompiledProgram,
@@ -58,11 +61,13 @@ export interface StoryScene {
   settled(): boolean
 }
 
-const STORY_ALPHAS = [0.75, 0.65, 0.7, 0.75, 0.8, 0.8] as const
 const STORY_DEPTH = 5
-const EXCURSION = 50
-const FAN_HALF = 1 / Math.sqrt(3)
-const TRIANGLE_AREA = 1 / Math.sqrt(3)
+// Short on purpose: the detours are PART of the set and must fit the frame.
+// Their cost scales like 1/length - the copy and playground make that point.
+const EXCURSION = 2
+// Depth 0 is the uncut triangle; deeper alphas come from the measured table,
+// so the drawn figure and the shown number can never describe different sets.
+const alphaFor = (depth: number): number => (depth === 0 ? 0.75 : AREA_TABLE[depth - 1]!.alpha)
 
 const ease = (t: number): number => t * t * (3 - 2 * t)
 
@@ -80,17 +85,14 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
   // parent sat so the split-and-slide reads as continuous motion.
   const fans: DepthStep[] = []
   for (let d = 0; d <= STORY_DEPTH; d++) {
-    const slices = perronTree(vec(0, 1), -FAN_HALF, FAN_HALF, {
-      depth: d,
-      alpha: STORY_ALPHAS[d]!,
-    })
+    const slices = equilateralFan({ depth: d, alpha: alphaFor(d) })
     const parent = d === 0 ? null : fans[d - 1]!
     fans.push({
       slices,
       parentOffsets: slices.map((_, j) =>
         parent === null ? 0 : parent.slices[Math.floor(j / 2)]!.offset,
       ),
-      area: d === 0 ? TRIANGLE_AREA : AREA_TABLE[d - 1]!.fanArea,
+      area: d === 0 ? EQUILATERAL_AREA : AREA_TABLE[d - 1]!.fanArea,
     })
   }
   const fanBoxes = fans.map((f) => boundingBox(f.slices.map((s) => s.polygon)))
@@ -104,13 +106,16 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
   // Sweep beats: the full apparatus at story depth.
   const sweep = kakeyaSweep({
     depth: STORY_DEPTH,
-    alpha: STORY_ALPHAS[STORY_DEPTH]!,
+    alpha: alphaFor(STORY_DEPTH),
     joinExcursion: EXCURSION,
   })
   const sweepCompiled: CompiledProgram = compile({ start: sweep.start, moves: [...sweep.moves] })
   const sweepTimeline: Timeline = buildTimeline(sweepCompiled)
   const sweepPolys = sweep.slices.map((s) => s.polygon)
-  const coreBox = boundingBox(sweepPolys)
+  // The drawn set is slices AND join sectors; the travel lines ride along.
+  const sweepSetPolys = [...sweepPolys, ...sweep.joins.flatMap((j) => [...j.sectors])]
+  const sweepPaths = sweep.joins.flatMap((j) => [...j.paths])
+  const coreBox = boundingBox([...sweepSetPolys, ...sweepPaths.map(([a, b]) => [a, b] as const)])
   const sweepRow = AREA_TABLE[STORY_DEPTH - 1]!
 
   // The join beat plays one specific excursion: a mid-figure join, well away
@@ -118,12 +123,13 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
   const joinSegments = sweep.segments.filter(
     (s): s is Extract<SweepSegment, { kind: 'join' }> => s.kind === 'join',
   )
-  const joinSegment = joinSegments[Math.floor(2 ** STORY_DEPTH * 1.5)]!
+  // The middle join of the second fan: typical tilt, far from fan boundaries.
+  const SLICES_PER_FAN = 2 ** STORY_DEPTH
+  const joinSegment = joinSegments[SLICES_PER_FAN + SLICES_PER_FAN / 2]!
   const joinRange = {
     from: sweepCompiled.offsets[joinSegment.moveStart]!,
     to: sweepCompiled.offsets[joinSegment.moveEnd]!,
   }
-  const activeJoin = sweep.joins[joinSegment.join]!
 
   // Deltoid beat.
   const deltoid = deltoidPolygon(UNIT_NEEDLE_R, 1024)
@@ -134,8 +140,16 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
   let lastScale = 1
   let lastTarget: CameraTarget | null = null
 
+  // The label card occupies the bottom band of the screen; lift the figure
+  // above it and back the zoom off slightly so art and text never fight.
+  const biasForCard = (target: CameraTarget, vp: Viewport): CameraTarget => ({
+    x: target.x,
+    y: target.y - (0.07 * vp.height) / target.zoom,
+    zoom: target.zoom * 0.94,
+  })
+
   const needleBoxTarget = (n: Needle, vp: Viewport): CameraTarget => {
-    const b = { x: n.a.x + dir(n.theta).x, y: n.a.y + dir(n.theta).y }
+    const b = needleB(n)
     return frameBox(
       Math.min(coreBox.minX, n.a.x, b.x),
       Math.min(coreBox.minY, n.a.y, b.y),
@@ -157,130 +171,33 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
       return cam !== null && lastTarget !== null && cameraSettled(cam, lastTarget)
     },
     frame(ctx, vp, dpr, dt): StoryFrame {
-      // Reduced motion means no autonomous or eased movement - but scrubbing
-      // that tracks the user's own scrolling stays, linear and direct.
       const { index, local } = beatAt(progress)
-      const beat = BEATS[index]!
-      const t = reduced ? local : ease(local)
 
-      let target: CameraTarget = frameBox(-1.3, -0.9, 1.3, 0.9, vp, 0.15)
-      let counter = ''
-      let draw: (p: Painter) => void = () => {}
-
-      switch (beat.id) {
-        case 'needle': {
-          target = frameBox(-1.1, -0.55, 1.1, 0.55, vp, 0.15)
-          draw = (p) => drawNeedle(p, { a: vec(-0.5, 0), theta: 0 })
-          break
+      // Dissolve between beats: through the opening stretch of each beat,
+      // the previous beat's final image fades away underneath this one.
+      const FADE = 0.15
+      const plan = planBeat(index, local, vp)
+      let target = plan.target
+      let counter = plan.counter
+      let paint: (p: Painter) => void = plan.draw
+      if (index > 0 && local < FADE && !reduced) {
+        const k = ease(local / FADE)
+        const prev = planBeat(index - 1, 1, vp)
+        target = {
+          x: prev.target.x + (target.x - prev.target.x) * k,
+          y: prev.target.y + (target.y - prev.target.y) * k,
+          zoom: Math.exp(
+            Math.log(prev.target.zoom) + (Math.log(target.zoom) - Math.log(prev.target.zoom)) * k,
+          ),
         }
-        case 'halfdisc':
-        case 'question': {
-          const swept = beat.id === 'question' ? Math.PI : t * Math.PI
-          target = frameBox(-1.15, -0.2, 1.15, 1.1, vp, 0.15)
-          draw = (p) => {
-            const fanPts = [vec(0, 0)]
-            const steps = Math.max(2, Math.ceil((swept / Math.PI) * 64))
-            for (let i = 0; i <= steps; i++) {
-              fanPts.push(dir((swept * i) / steps))
-            }
-            p.ctx.globalAlpha = beat.id === 'question' ? 0.35 : 1
-            drawFlatUnion(p, [fanPts], RED_SOFT)
-            drawInkPolygon(p, fanPts)
-            p.ctx.globalAlpha = 1
-            drawNeedle(p, { a: vec(0, 0), theta: swept })
-          }
-          if (beat.id === 'halfdisc') counter = `${((swept / Math.PI) * 1.5708).toFixed(4)}`
-          break
-        }
-        case 'deltoid': {
-          target = frameBox(
-            deltoidBox.minX,
-            deltoidBox.minY,
-            deltoidBox.maxX,
-            deltoidBox.maxY,
-            vp,
-            0.2,
-          )
-          const dn = deltoidNeedle(UNIT_NEEDLE_R, t * 2 * Math.PI)
-          draw = (p) => {
-            drawFlatUnion(p, [deltoid], WASH_FLAT)
-            drawInkPolygon(p, deltoid)
-            drawNeedle(p, { a: dn.a, theta: Math.atan2(dn.b.y - dn.a.y, dn.b.x - dn.a.x) })
-          }
-          counter = '0.3927'
-          break
-        }
-        case 'besicovitch': {
-          target = frameBox(fanBox.minX, fanBox.minY, fanBox.maxX, fanBox.maxY, vp, 0.18)
-          draw = (p) => {
-            drawFlatUnion(p, [fans[0]!.slices[0]!.polygon], WASH_FLAT)
-            drawInkPolygon(p, fans[0]!.slices[0]!.polygon)
-          }
-          counter = TRIANGLE_AREA.toFixed(4)
-          break
-        }
-        case 'construction': {
-          target = frameBox(fanBox.minX, fanBox.minY, fanBox.maxX, fanBox.maxY, vp, 0.18)
-          const seg = Math.min(t * STORY_DEPTH, STORY_DEPTH - 1e-9)
-          const d = Math.floor(seg)
-          const f = ease(seg - d)
-          const step = fans[d + 1]!
-          draw = (p) => {
-            const polys = step.slices.map((s, j) =>
-              translatePolygon(s.polygon, (step.parentOffsets[j]! - s.offset) * (1 - f)),
-            )
-            // Opaque silhouette, always; the slice anatomy fades in only
-            // while the pieces are actually sliding.
-            drawEdges(p, polys, WASH_EDGE)
-            drawFlatUnion(p, polys, WASH_FLAT)
-            const anatomy = Math.sin(Math.PI * f)
-            if (anatomy > 0.02) {
-              p.ctx.globalAlpha = anatomy * 0.6
-              for (const poly of polys) drawWashPolygon(p, poly)
-              p.ctx.globalAlpha = 1
-            }
-          }
-          const area = fans[d]!.area + (step.area - fans[d]!.area) * f
-          counter = area.toFixed(4)
-          break
-        }
-        case 'join': {
-          const s = joinRange.from + (joinRange.to - joinRange.from) * t
-          const n = evaluate(sweepCompiled, s)
-          target = needleBoxTarget(n, vp)
-          draw = (p) => {
-            for (const [a, b] of activeJoin.paths) drawPencilSegment(p, a, b)
-            drawEdges(p, sweepPolys, WASH_EDGE)
-            drawFlatUnion(p, sweepPolys, WASH_FLAT)
-            drawNeedle(p, n)
-          }
-          break
-        }
-        case 'sweep': {
-          const n = evaluate(sweepCompiled, progressToDistance(sweepTimeline, t))
-          target = frameBox(coreBox.minX, coreBox.minY, coreBox.maxX, coreBox.maxY, vp, 0.16)
-          draw = (p) => {
-            drawEdges(p, sweepPolys, WASH_EDGE)
-            drawFlatUnion(p, sweepPolys, WASH_FLAT)
-            drawNeedle(p, n)
-          }
-          counter = `${sweepRow.sweepArea.toFixed(4)} + ${(
-            (sweepRow.joinArea * 100) /
-            EXCURSION
-          ).toFixed(4)} for the detours`
-          break
-        }
-        case 'solved':
-        case 'coda': {
-          target = frameBox(coreBox.minX, coreBox.minY, coreBox.maxX, coreBox.maxY, vp, 0.16)
-          draw = (p) => {
-            drawEdges(p, sweepPolys, WASH_EDGE)
-            drawFlatUnion(p, sweepPolys, WASH_FLAT)
-          }
-          break
+        counter = k < 0.5 ? prev.counter : counter
+        paint = (p) => {
+          withAlpha(p, 1 - k, prev.draw)
+          withAlpha(p, k, plan.draw)
         }
       }
 
+      target = biasForCard(target, vp)
       cam = cam === null ? camera(target) : stepCamera(cam, target, reduced ? 10 : dt)
       lastTarget = target
 
@@ -288,9 +205,150 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
       ctx.fillRect(0, 0, vp.width, vp.height)
       const transform = cameraTransform(cam, vp)
       lastScale = transform.scale
-      draw({ ctx, transform, dpr })
+      paint({ ctx, transform, dpr })
 
       return { counter, beatIndex: index }
     },
+  }
+
+  interface BeatPlan {
+    readonly target: CameraTarget
+    readonly counter: string
+    readonly draw: (p: Painter) => void
+  }
+
+  function withAlpha(p: Painter, alpha: number, draw: (p: Painter) => void): void {
+    const before = p.ctx.globalAlpha
+    p.ctx.globalAlpha = before * alpha
+    draw(p)
+    p.ctx.globalAlpha = before
+  }
+
+  // Reduced motion means no autonomous or eased movement - but scrubbing
+  // that tracks the user's own scrolling stays, linear and direct.
+  function planBeat(index: number, local: number, vp: Viewport): BeatPlan {
+    const beat = BEATS[index]!
+    const t = reduced ? local : ease(local)
+
+    let target: CameraTarget = frameBox(-1.3, -0.9, 1.3, 0.9, vp, 0.15)
+    let counter = ''
+    let draw: (p: Painter) => void = () => {}
+
+    switch (beat.id) {
+      case 'needle': {
+        target = frameBox(-1.1, -0.55, 1.1, 0.55, vp, 0.15)
+        draw = (p) => drawNeedle(p, { a: vec(-0.5, 0), theta: 0 })
+        break
+      }
+      case 'halfdisc':
+      case 'question': {
+        const swept = beat.id === 'question' ? Math.PI : t * Math.PI
+        target = frameBox(-1.15, -0.2, 1.15, 1.1, vp, 0.15)
+        draw = (p) => {
+          const fanPts = [vec(0, 0)]
+          const steps = Math.max(2, Math.ceil((swept / Math.PI) * 64))
+          for (let i = 0; i <= steps; i++) {
+            fanPts.push(dir((swept * i) / steps))
+          }
+          const base = p.ctx.globalAlpha
+          p.ctx.globalAlpha = base * (beat.id === 'question' ? 0.35 : 1)
+          drawFlatUnion(p, [fanPts], RED_SOFT)
+          drawInkPolygon(p, fanPts)
+          p.ctx.globalAlpha = base
+          drawNeedle(p, { a: vec(0, 0), theta: swept })
+        }
+        if (beat.id === 'halfdisc') counter = (swept / 2).toFixed(4)
+        break
+      }
+      case 'deltoid': {
+        target = frameBox(
+          deltoidBox.minX,
+          deltoidBox.minY,
+          deltoidBox.maxX,
+          deltoidBox.maxY,
+          vp,
+          0.2,
+        )
+        const dn = deltoidNeedle(UNIT_NEEDLE_R, t * 2 * Math.PI)
+        draw = (p) => {
+          drawFlatUnion(p, [deltoid], WASH_FLAT)
+          drawInkPolygon(p, deltoid)
+          drawNeedle(p, { a: dn.a, theta: Math.atan2(dn.b.y - dn.a.y, dn.b.x - dn.a.x) })
+        }
+        counter = deltoidArea(UNIT_NEEDLE_R).toFixed(4)
+        break
+      }
+      case 'besicovitch': {
+        target = frameBox(fanBox.minX, fanBox.minY, fanBox.maxX, fanBox.maxY, vp, 0.18)
+        draw = (p) => {
+          drawFlatUnion(p, [fans[0]!.slices[0]!.polygon], WASH_FLAT)
+          drawInkPolygon(p, fans[0]!.slices[0]!.polygon)
+        }
+        counter = EQUILATERAL_AREA.toFixed(4)
+        break
+      }
+      case 'construction': {
+        const seg = Math.min(t * STORY_DEPTH, STORY_DEPTH - 1e-9)
+        const d = Math.floor(seg)
+        const box = fanBoxes[d + 1]!
+        target = frameBox(box.minX, box.minY, box.maxX, box.maxY, vp, 0.18)
+        const f = ease(seg - d)
+        const step = fans[d + 1]!
+        draw = (p) => {
+          const polys = step.slices.map((s, j) =>
+            translatePolygon(s.polygon, (step.parentOffsets[j]! - s.offset) * (1 - f)),
+          )
+          // Opaque silhouette, always; the slice anatomy fades in only
+          // while the pieces are actually sliding.
+          drawEdges(p, polys, WASH_EDGE)
+          drawFlatUnion(p, polys, WASH_FLAT)
+          const anatomy = Math.sin(Math.PI * f)
+          if (anatomy > 0.02) {
+            p.ctx.globalAlpha = anatomy * 0.6
+            for (const poly of polys) drawWashPolygon(p, poly)
+            p.ctx.globalAlpha = 1
+          }
+        }
+        const area = fans[d]!.area + (step.area - fans[d]!.area) * f
+        counter = area.toFixed(4)
+        break
+      }
+      case 'join': {
+        const s = joinRange.from + (joinRange.to - joinRange.from) * t
+        const n = evaluate(sweepCompiled, s)
+        target = needleBoxTarget(n, vp)
+        draw = (p) => {
+          for (const [a, b] of sweepPaths) drawPencilSegment(p, a, b)
+          drawEdges(p, sweepSetPolys, WASH_EDGE)
+          drawFlatUnion(p, sweepSetPolys, WASH_FLAT)
+          drawNeedle(p, n)
+        }
+        break
+      }
+      case 'sweep': {
+        const n = evaluate(sweepCompiled, progressToDistance(sweepTimeline, t))
+        target = frameBox(coreBox.minX, coreBox.minY, coreBox.maxX, coreBox.maxY, vp, 0.16)
+        draw = (p) => {
+          for (const [a, b] of sweepPaths) drawPencilSegment(p, a, b)
+          drawEdges(p, sweepSetPolys, WASH_EDGE)
+          drawFlatUnion(p, sweepSetPolys, WASH_FLAT)
+          drawNeedle(p, n)
+        }
+        counter = `${sweepRow.sweepArea.toFixed(4)} + ${sweep.joinArea.toFixed(4)} for the detours`
+        break
+      }
+      case 'solved':
+      case 'coda': {
+        target = frameBox(coreBox.minX, coreBox.minY, coreBox.maxX, coreBox.maxY, vp, 0.16)
+        draw = (p) => {
+          for (const [a, b] of sweepPaths) drawPencilSegment(p, a, b)
+          drawEdges(p, sweepSetPolys, WASH_EDGE)
+          drawFlatUnion(p, sweepSetPolys, WASH_FLAT)
+        }
+        break
+      }
+    }
+
+    return { target, counter, draw }
   }
 }

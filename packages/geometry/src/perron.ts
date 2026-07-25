@@ -141,8 +141,11 @@ export const falconerAreaBound = (opts: PerronOptions): number => {
   return 1 - ((3 * alpha - 1) * (1 - alpha ** (2 * depth))) / (1 + alpha)
 }
 
+/** Half base of the canonical equilateral fan triangle of height 1. */
+export const EQUILATERAL_HALF = 1 / Math.sqrt(3)
+/** Its area: base times height over two, which is also 1/sqrt(3). */
+export const EQUILATERAL_AREA = 1 / Math.sqrt(3)
+
 /** The canonical fan: equilateral triangle of height 1, apex up, 60 degrees of directions. */
-export const equilateralFan = (opts: PerronOptions): PerronSlice[] => {
-  const half = 1 / Math.sqrt(3)
-  return perronTree(vec(0, 1), -half, half, opts)
-}
+export const equilateralFan = (opts: PerronOptions): PerronSlice[] =>
+  perronTree(vec(0, 1), -EQUILATERAL_HALF, EQUILATERAL_HALF, opts)
