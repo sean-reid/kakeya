@@ -42,11 +42,13 @@ const scene = createStoryScene(reduced)
 const sections = [...story.querySelectorAll<HTMLElement>('.beat')]
 
 let dpr = 1
+let needsDraw = true
 const resize = (): void => {
   dpr = window.devicePixelRatio || 1
   canvas.width = Math.round(canvas.clientWidth * dpr)
   canvas.height = Math.round(canvas.clientHeight * dpr)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  needsDraw = true
 }
 resize()
 window.addEventListener('resize', resize)
@@ -61,16 +63,29 @@ let activeIndex = -1
 // animation lurch. The sections are sized in svh, which is just as fixed.
 const viewportAtLoad = window.innerHeight
 
+let lastU = -1
+
 const tick = (now: number): void => {
   const dt = warpNext ? 5 : Math.min((now - last) / 1000, 0.1)
+  const warped = warpNext
   warpNext = false
   last = now
 
+  let u = pinned ?? lastU
   if (pinned === null) {
     const scrollable = story.offsetHeight - viewportAtLoad
-    const u = scrollable > 0 ? -story.getBoundingClientRect().top / scrollable : 0
-    scene.setProgress(u)
+    u = scrollable > 0 ? -story.getBoundingClientRect().top / scrollable : 0
   }
+
+  // Idle means idle: when nothing moved and the camera has arrived, paint
+  // nothing. Full-canvas repaints at 60fps are pure battery drain.
+  if (u === lastU && !warped && !needsDraw && scene.settled()) {
+    requestAnimationFrame(tick)
+    return
+  }
+  lastU = u
+  needsDraw = false
+  scene.setProgress(u)
 
   const frame = scene.frame(
     ctx,
@@ -109,7 +124,7 @@ window.__kakeya = {
     scene.setProgress(u)
   },
   freeze() {
-    pinned = -1
+    pinned = lastU
   },
   settle() {
     warpNext = true

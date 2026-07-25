@@ -68,13 +68,20 @@ export const drawFlatUnion = (p: Painter, polys: readonly Polygon[], fill: strin
 }
 
 export const drawEdges = (p: Painter, polys: readonly Polygon[], stroke: string): void => {
-  const { ctx } = p
+  const { ctx, transform } = p
+  // One path, one stroke: per-polygon strokes cost a rasterization pass each.
+  ctx.beginPath()
   for (const poly of polys) {
-    tracePolygon(p, poly)
-    ctx.strokeStyle = stroke
-    ctx.lineWidth = hairline(p)
-    ctx.stroke()
+    poly.forEach((v, i) => {
+      const s = worldToScreen(transform, v.x, v.y)
+      if (i === 0) ctx.moveTo(s.x, s.y)
+      else ctx.lineTo(s.x, s.y)
+    })
+    ctx.closePath()
   }
+  ctx.strokeStyle = stroke
+  ctx.lineWidth = hairline(p)
+  ctx.stroke()
 }
 
 export const drawInkPolygon = (p: Painter, poly: Polygon): void => {

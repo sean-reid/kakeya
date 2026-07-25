@@ -20,6 +20,7 @@ import {
   camera,
   cameraTransform,
   frameBox,
+  cameraSettled,
   stepCamera,
   type Camera,
   type CameraTarget,
@@ -53,6 +54,8 @@ export interface StoryScene {
   setProgress(u: number): void
   frame(ctx: CanvasRenderingContext2D, vp: Viewport, dpr: number, dt: number): StoryFrame
   scale(): number
+  /** True once the camera has arrived; nothing will change until input does. */
+  settled(): boolean
 }
 
 const STORY_ALPHAS = [0.75, 0.65, 0.7, 0.75, 0.8, 0.8] as const
@@ -129,6 +132,7 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
   let progress = 0
   let cam: Camera | null = null
   let lastScale = 1
+  let lastTarget: CameraTarget | null = null
 
   const needleBoxTarget = (n: Needle, vp: Viewport): CameraTarget => {
     const b = { x: n.a.x + dir(n.theta).x, y: n.a.y + dir(n.theta).y }
@@ -148,6 +152,9 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
     },
     scale() {
       return lastScale
+    },
+    settled() {
+      return cam !== null && lastTarget !== null && cameraSettled(cam, lastTarget)
     },
     frame(ctx, vp, dpr, dt): StoryFrame {
       // Reduced motion means no autonomous or eased movement - but scrubbing
@@ -275,6 +282,7 @@ export const createStoryScene = (reduced: boolean): StoryScene => {
       }
 
       cam = cam === null ? camera(target) : stepCamera(cam, target, reduced ? 10 : dt)
+      lastTarget = target
 
       ctx.fillStyle = PAPER
       ctx.fillRect(0, 0, vp.width, vp.height)
