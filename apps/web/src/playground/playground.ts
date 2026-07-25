@@ -14,7 +14,6 @@ import {
   cameraTransform,
   frameBox,
   stepCamera,
-  worldToScreen,
   type Camera,
   type CameraTarget,
   type Viewport,
@@ -32,7 +31,7 @@ import {
   drawPencilSegment,
   type Painter,
 } from '../paint/painter'
-import { PAPER, RED_SOFT, WASH_EDGE, WASH_FLAT } from '../paint/styles'
+import { PAPER, WASH_EDGE, WASH_FLAT } from '../paint/styles'
 
 /**
  * The instrument. Every control drives the same verified machinery the story
@@ -48,8 +47,6 @@ interface State {
   u: number
   playing: boolean
   speed: number
-  follow: boolean
-  trail: boolean
   /** Seek destination for the direction dial, or null. */
   seekTo: number | null
 }
@@ -136,8 +133,6 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     u: 0,
     playing: false,
     speed: 1,
-    follow: false,
-    trail: true,
     seekTo: null,
   }
   let built = build(state.depth, state.excursion)
@@ -184,15 +179,6 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   speedInput.value = '1'
   speedInput.dataset.testid = 'speed'
 
-  const followInput = el('input') as HTMLInputElement
-  followInput.type = 'checkbox'
-  followInput.dataset.testid = 'follow'
-
-  const trailInput = el('input') as HTMLInputElement
-  trailInput.type = 'checkbox'
-  trailInput.checked = true
-  trailInput.dataset.testid = 'trail'
-
   const strip = el('div', 'controls')
   strip.append(
     playBtn,
@@ -200,8 +186,6 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     control('cuts', depthInput, depthValue),
     control('detour length', excursionInput, excursionValue),
     control('pace', speedInput),
-    control('ride along', followInput),
-    control('trail', trailInput),
   )
 
   const note = el('p', 'playground-note')
@@ -252,14 +236,6 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
   })
   speedInput.addEventListener('input', () => {
     state.speed = Number(speedInput.value)
-  })
-  followInput.addEventListener('change', () => {
-    state.follow = followInput.checked
-    dirty = true
-  })
-  trailInput.addEventListener('change', () => {
-    state.trail = trailInput.checked
-    dirty = true
   })
 
   state.excursion = sliderExcursion()
@@ -319,12 +295,14 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
       dialValue.textContent = ''
     }
 
-    let target: CameraTarget
-    if (state.follow) {
-      target = frameBox(n.a.x - 1.6, n.a.y - 1.6, n.a.x + 1.6, n.a.y + 1.6, vp, 0.1)
-    } else {
-      target = frameBox(built.box.minX, built.box.minY, built.box.maxX, built.box.maxY, vp, 0.08)
-    }
+    const target = frameBox(
+      built.box.minX,
+      built.box.minY,
+      built.box.maxX,
+      built.box.maxY,
+      vp,
+      0.08,
+    )
     cam = cam === null ? camera(target) : stepCamera(cam, target, reduced ? 10 : dt)
     const settledNow = lastTarget !== null && cameraSettled(cam, lastTarget)
     lastTarget = target
@@ -339,33 +317,7 @@ export const mountPlayground = (host: HTMLElement, reduced: boolean): void => {
     drawEdges(p, built.setPolys, WASH_EDGE)
     drawFlatUnion(p, built.setPolys, WASH_FLAT)
 
-    if (state.trail && state.u > 0) {
-      const steps = Math.min(160, Math.max(12, Math.floor(state.u * 160)))
-      p.ctx.strokeStyle = RED_SOFT
-      p.ctx.lineWidth = 2 / dpr
-      for (let i = 0; i <= steps; i++) {
-        const past = evaluate(
-          built.compiled,
-          progressToDistance(built.timeline, (state.u * i) / steps),
-        )
-        drawPencilTrailSegment(p, past)
-      }
-    }
-
     drawNeedle(p, n)
   }
   requestAnimationFrame(tick)
-}
-
-const drawPencilTrailSegment = (
-  p: Painter,
-  n: { a: { x: number; y: number }; theta: number },
-): void => {
-  const { ctx, transform } = p
-  const sa = worldToScreen(transform, n.a.x, n.a.y)
-  const sb = worldToScreen(transform, n.a.x + Math.cos(n.theta), n.a.y + Math.sin(n.theta))
-  ctx.beginPath()
-  ctx.moveTo(sa.x, sa.y)
-  ctx.lineTo(sb.x, sb.y)
-  ctx.stroke()
 }

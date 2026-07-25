@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test('the instrument renders with its area line', async ({ page }) => {
   await expect(page.getByTestId('playground-area')).toContainText('tree')
   await expect(page.getByTestId('playground-area')).toContainText('detours')
-  for (const id of ['play', 'direction', 'depth', 'excursion', 'speed', 'follow', 'trail']) {
+  for (const id of ['play', 'direction', 'depth', 'excursion', 'speed']) {
     await expect(page.getByTestId(id)).toBeAttached()
   }
 })
