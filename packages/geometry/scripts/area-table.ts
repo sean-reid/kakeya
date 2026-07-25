@@ -1,0 +1,190 @@
+import { writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import polygonClipping from 'polygon-clipping'
+import { equilateralFan, perronAreaUpperBound } from '../src/perron'
+import { kakeyaSweep } from '../src/sweep'
+import type { Polygon } from '../src/polygon'
+import { gridUnionArea } from '../src/union'
+import { rotate } from '../src/vec'
+
+/**
+ * Measures the union area of the construction at every depth and regenerates
+ * src/area-table.ts for the site.
+ *
+ * Method: the best overlap parameter per depth is picked by coarse grid
+ * sampling (only the ranking matters there). The chosen configuration is then
+ * measured two independent ways - exact clipping, merged pairwise because a
+ * single N-way Martinez union of overlapping slivers exhausts memory, and
+ * fine grid sampling - and the two must agree. Join sectors are never
+ * clipped; their area is exactly the sum of tilt angles.
+ *
+ *   pnpm exec tsx scripts/area-table.ts
+ */
+
+const FAN_AREA = 1 / Math.sqrt(3)
+const DEPTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+const ALPHAS = [0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9]
+const SNAP = 1e-9
+const PICK_CELL = 0.004
+const FINE_CELL = 0.0015
+const COARSE_CELL = 0.003
+const TOLERANCE = 0.02
+
+type Ring = [number, number][]
+type MultiPoly = Ring[][]
+const snap = (v: number): number => Math.round(v / SNAP) * SNAP
+const toMulti = (poly: Polygon): MultiPoly => [[poly.map((p) => [snap(p.x), snap(p.y)])]]
+
+const multiArea = (multi: MultiPoly): number => {
+  let total = 0
+  for (const poly of multi) {
+    for (let r = 0; r < poly.length; r++) {
+      const ring = poly[r]!
+      let sum = 0
+      for (let i = 0; i < ring.length - 1; i++) {
+        const [x0, y0] = ring[i]!
+        const [x1, y1] = ring[i + 1]!
+        sum += x0 * y1 - x1 * y0
+      }
+      total += (r === 0 ? 1 : -1) * Math.abs(sum / 2)
+    }
+  }
+  return total
+}
+
+/** Pairwise divide-and-conquer union; null when the clipper gives up. */
+const clippedUnionArea = (polys: readonly Polygon[]): number | null => {
+  try {
+    let level: MultiPoly[] = polys.map(toMulti)
+    while (level.length > 1) {
+      const next: MultiPoly[] = []
+      for (let i = 0; i < level.length; i += 2) {
+        next.push(
+          i + 1 < level.length ? polygonClipping.union(level[i]!, level[i + 1]!) : level[i]!,
+        )
+      }
+      level = next
+    }
+    return multiArea(level[0]!)
+  } catch {
+    return null
+  }
+}
+
+/** Fine-grid measurement that must agree with a coarser pass to count. */
+const convergedGridArea = (polys: readonly Polygon[], label: string): number => {
+  const coarse = gridUnionArea(polys, COARSE_CELL)
+  const fine = gridUnionArea(polys, FINE_CELL)
+  if (Math.abs(coarse - fine) > TOLERANCE) {
+    throw new Error(`grid not converged for ${label}: ${coarse} vs ${fine}`)
+  }
+  return fine
+}
+
+const measure = (polys: readonly Polygon[], label: string): { value: number; method: string } => {
+  const grid = convergedGridArea(polys, label)
+  const exact = clippedUnionArea(polys)
+  if (exact !== null) {
+    if (Math.abs(exact - grid) > TOLERANCE) {
+      throw new Error(`clip and grid disagree for ${label}: ${exact} vs ${grid}`)
+    }
+    return { value: exact, method: 'clip+grid' }
+  }
+  return { value: grid, method: 'grid2' }
+}
+
+interface Row {
+  depth: number
+  alpha: number
+  fanArea: number
+  sweepArea: number
+  joinArea: number
+  method: string
+}
+
+console.log('pass 1: picking alpha per depth by coarse grid')
+const picks = new Map<number, number>()
+for (const depth of DEPTHS) {
+  let bestAlpha = ALPHAS[0]!
+  let bestArea = Infinity
+  for (const alpha of ALPHAS) {
+    const polys = equilateralFan({ depth, alpha }).map((s) => s.polygon)
+    const a = gridUnionArea(polys, PICK_CELL)
+    if (a < bestArea) {
+      bestArea = a
+      bestAlpha = alpha
+    }
+  }
+  picks.set(depth, bestAlpha)
+  console.log(`depth ${depth}: alpha ${bestAlpha} (~${bestArea.toFixed(4)})`)
+}
+
+console.log('pass 2: measuring the picked configurations two ways')
+const rows: Row[] = []
+for (const depth of DEPTHS) {
+  const alpha = picks.get(depth)!
+  const fanPolys = equilateralFan({ depth, alpha }).map((s) => s.polygon)
+  const fan = measure(fanPolys, `fan d${depth}`)
+
+  const bound = perronAreaUpperBound({ depth, alpha }) * FAN_AREA
+  if (fan.value > bound + TOLERANCE) {
+    throw new Error(`bound violated at depth ${depth}: ${fan.value} > ${bound}`)
+  }
+
+  const allSlices: Polygon[] = []
+  for (let f = 0; f < 3; f++) {
+    for (const p of fanPolys) allSlices.push(p.map((v) => rotate(v, (f * Math.PI) / 3)))
+  }
+  const sweep = measure(allSlices, `sweep d${depth}`)
+  const joins = kakeyaSweep({ depth, alpha, joinExcursion: 100 })
+
+  rows.push({
+    depth,
+    alpha,
+    fanArea: fan.value,
+    sweepArea: sweep.value,
+    joinArea: joins.joinArea,
+    method: `${fan.method}/${sweep.method}`,
+  })
+  console.log(
+    `depth ${depth}: alpha ${alpha}, fan ${fan.value.toFixed(4)}, sweep ${sweep.value.toFixed(4)}, ` +
+      `joins(N=100) ${joins.joinArea.toFixed(4)} [${rows[rows.length - 1]!.method}]`,
+  )
+}
+
+const header = `// Generated by scripts/area-table.ts - do not edit by hand.
+// Union areas of the construction, exact clipping cross-checked against grid
+// sampling. The needle's naive half-disc sweep has area ${(Math.PI / 2).toFixed(4)};
+// these are what the construction brings that down to.
+
+export interface AreaRow {
+  readonly depth: number
+  /** Overlap parameter chosen by measurement at this depth. */
+  readonly alpha: number
+  /** Union area of one sixty-degree fan (equilateral, height 1). */
+  readonly fanArea: number
+  /** Union area of all three fans' slices together. */
+  readonly sweepArea: number
+  /** Total join sector area at excursion 100; scales like 1/excursion. */
+  readonly joinArea: number
+}
+`
+
+const body = rows
+  .map(
+    (r) =>
+      `  { depth: ${r.depth}, alpha: ${r.alpha}, fanArea: ${r.fanArea.toFixed(6)}, ` +
+      `sweepArea: ${r.sweepArea.toFixed(6)}, joinArea: ${r.joinArea.toFixed(6)} },`,
+  )
+  .join('\n')
+
+const out = `${header}
+export const AREA_TABLE: readonly AreaRow[] = [
+${body}
+]
+`
+
+const here = dirname(fileURLToPath(import.meta.url))
+writeFileSync(join(here, '../src/area-table.ts'), out)
+console.log('wrote src/area-table.ts')
